@@ -14373,8 +14373,8 @@ const DL0_SCENES = [
 
 { title:'Архитектуры под данные', dur:19.0, poster:16.2,
   beats:[
-    { t:.3, text:'Полносвязная сеть MLP на слоях nn.Linear связывает каждый вход с каждым нейроном — база для таблиц и векторов.', code:'nn.Linear(d_in, d_out)  # векторы [B, F]' },
-    { t:5.0, text:'Для фото свёрточные сети CNN скользят локальными фильтрами по пикселям и переносят знания через Transfer Learning.', code:'nn.Conv2d(3, 64, 3)  # фото [B, C, H, W]' },
+    { t:.3, text:'Полносвязная MLP на слоях nn.Linear связывает все входы с нейронами — база для таблиц и векторов.', code:'nn.Linear(d_in, d_out)  # векторы [B, F]' },
+    { t:5.0, text:'Для фото свёрточные CNN скользят фильтрами по пикселям и переносят знания через Transfer Learning.', code:'nn.Conv2d(3, 64, 3)  # фото [B, C, H, W]' },
     { t:9.8, text:'Для временных рядов и последовательностей RNN, LSTM и GRU передают скрытую память шаг за шагом во времени.', code:'nn.LSTM(d_in, hid)  # ряды [B, T, D]' },
     { t:14.5, text:'А Attention и Transformers напрямую связывают каждый токен со всем контекстом — это основа современных LLM!', code:'nn.MultiheadAttention(d_model, n_heads)' }],
   hud:t => [['семейств сетей', String(t < 5.0 ? 1 : t < 9.8 ? 2 : t < 14.5 ? 3 : 4), 'i']],
@@ -14404,28 +14404,28 @@ const DL0_SCENES = [
 ];
 
 const DL0_META = [
-  { intro:'Чем глубокое обучение отличается от классического ML с ручными признаками.',
-    key:'Нейросеть — цепочка параметрических слоёв, которая сама учит иерархию признаков напрямую из сырых данных.',
+  { intro:'Чем DL отличается от классического ML с ручными признаками.',
+    key:'Нейросеть — цепочка слоёв, которая сама учит иерархию признаков из сырых данных.',
     keySay:'Главное. В глубоком обучении сеть сама выстраивает иерархию полезных представлений слой за слоем, избавляя от ручного конструирования признаков на сложных данных.',
     says:['В классическом машинном обучении качество модели на таблицах опирается на признаки, придуманные человеком. Но для картинок, звука и живого текста писать правила для сырых пикселей вручную почти невозможно.',
           'Нейронная сеть решает эту проблему: она выстраивает цепочку параметрических слоёв, где каждый следующий слой собирает из простых сигналов всё более сложные представления.',
           'Первые слои ловят базовые сочетания чисел или грани, средние — части объектов и контекст, а последний линейный слой принимает итоговое решение по готовому внутреннему описанию!'],
-    terms:[['представление', 'вектор скрытого слоя с выученными признаками'], ['скрытый слой', 'промежуточный слой между входом и выходом'], ['параметры W, b', 'обучаемые матрицы весов и смещений слоёв']] },
+    terms:[['представление', 'вектор выученных признаков слоя'], ['скрытый слой', 'слой между входом и выходом'], ['параметры W, b', 'обучаемые веса и смещения']] },
   { intro:'Из каких четырёх шагов состоит цикл обучения любой нейросети.',
     key:'Цикл на батче: 1) Forward pass до логитов, 2) расчёт Loss, 3) градиенты через Autograd, 4) шаг весов оптимизатором.',
     keySay:'Главное. Любая нейросеть учится одним циклом: прямой проход до логитов, расчёт функции потерь, обратный проход автограда за градиентами и шаг оптимизатора по весам.',
     says:['Любая нейросеть — от маленького перцептрона до большого трансформера — учится по одному и тому же циклу на мини-батчах данных. Первый шаг — прямой проход, форвард пасс, от входа икс к предсказанию.',
           'Второй шаг — функция потерь одним числом оценивает ошибку батча. Третий шаг — обратное распространение ошибки, автоград, по цепному правилу считает градиенты по всем весам.',
           'Четвёртый шаг — оптимизатор сдвигает матрицы весов против градиента и обнуляет старые градиенты перед следующим батчем. Тысячи таких итераций превращают случайные веса в точную модель!'],
-    terms:[['forward pass', 'прямой проход батча от входа к логитам'], ['Autograd', 'расчёт градиентов ∂L/∂W по цепному правилу'], ['opt.step()', 'сдвиг весов сети по накопленным градиентам']] },
-  { intro:'Какие архитектуры применяют для таблиц, фото, рядов и текста.',
-    key:'MLP работает с векторами, CNN — с сеткой пикселей, RNN/LSTM — с рядами, а Transformers связывают все токены сразу.',
+    terms:[['forward pass', 'прямой проход батча до логитов'], ['Autograd', 'расчёт ∂L/∂W по цепному правилу'], ['opt.step()', 'сдвиг весов по градиентам']] },
+  { intro:'Архитектуры под таблицы, фото, ряды и текст.',
+    key:'MLP учит векторы, CNN — пиксели, LSTM — ряды, Transformers — весь контекст.',
     keySay:'Главное. Под каждую структуру данных выбирают свою архитектуру: полносвязные слои для векторов, свёртки для картинок, рекуррентные сети для рядов и трансформеры для полного контекста.',
     says:['Полносвязная сеть, эм-эл-пи на слоях эн-эн линеар, соединяет каждый вход с каждым нейроном — это фундамент для табличных векторов и внутренних блоков более сложных моделей.',
           'Для изображений полносвязный слой слишком тяжёл и теряет соседей-пикселей: свёрточные сети, си-эн-эн, скользят небольшими фильтрами по картинке и переносят знания через трансфер лёрнинг.',
           'Для временных рядов и последовательностей рекуррентные сети — эр-эн-эн, эл-эс-ти-эм и джи-ар-ю — передают скрытое состояние шаг за шагом, удерживая память о прошлом.',
           'А механизм внимания и архитектура трансформеров позволяют каждому токену напрямую смотреть на все остальные позиции сразу — именно на них работают современные языковые модели!'],
-    terms:[['MLP (Dense)', 'полносвязная сеть из линейных слоёв'], ['CNN', 'свёрточная сеть с локальными фильтрами'], ['Transformers', 'прямой обмен контекстом через Attention']] },
+    terms:[['MLP', 'полносвязные линейные слои'], ['CNN', 'свёртки локальными фильтрами'], ['Transformers', 'контекст через Attention']] },
   { intro:'Что входит в восемь практических уроков модуля Deep Learning.',
     key:'Пройдём путь от ручного forward pass на NumPy и основ PyTorch до стабилизации сетей, CNN, LSTM и Transformers.',
     keySay:'Главное. За восемь уроков мы пройдём путь от первого нейрона и формул форвард-пасса вручную до ПайТорча, свёрточных сетей, трансформеров и инженерной дисциплины экспериментов.',
@@ -14675,7 +14675,7 @@ const DL1_META = [
     says:['Функция потерь кросс-энтропия для многоклассовой задачи смотрит на вероятность правильного класса: минус натуральный логарифм пэ-истинного. Если модель уверена в верном ответе, штраф крошечный.',
           'Но если сеть уверенно ошибается — как на третьем объекте, где верный нулевой класс получил всего одиннадцать с половиной процентов — логарифм резко взлетает до двух целых семнадцати сотых!',
           'Золотое правило ПайТорч: в кросс-энтропи-лосс и би-си-и виз логитс лосс передают строго сырые логиты! Внутри уже зашит устойчивый лог-сам-эксп, а лишний софтмакс снаружи сломает обучение!'],
-    terms:[['CrossEntropyLoss', 'штраф −ln(p_y) напрямую по сырым логитам'], ['BCEWithLogitsLoss', 'бинарная кросс-энтропия по одному логиту'], ['LogSumExp', 'устойчивый расчёт логарифма вероятностей']] },
+    terms:[['CrossEntropyLoss', 'штраф −ln(p_y) по сырым логитам'], ['BCEWithLogitsLoss', 'бинарный loss по одному логиту'], ['LogSumExp', 'устойчивый расчёт логарифма p']] },
   { intro:'Как проверять размерности (shape) на каждом шаге forward pass.',
     key:'Внутренние оси матриц обязаны совпадать: [5, 4] @ [4, 6] → [5, 6] → ReLU [5, 6] @ [6, 3] → [5, 3] (51 параметр).',
     keySay:'Главное. При сборке сети всегда проверяй шейп каждого тензора: размер батча идёт первой осью, активации форму не меняют, а внутренние размерности при умножении матриц обязаны совпадать.',
@@ -14714,11 +14714,280 @@ DL_LESSONS.push({ short:'Основы нейросетей', title:'Основы
   intro:{ eyebrow:'Тема 01 · Deep Learning', title:'Устройство нейросети и forward pass на NumPy',
           text:'Как слой считает Z = X @ W + b, зачем между слоями нужна ReLU, чем сырые logits отличаются от Softmax, почему в CrossEntropyLoss не подают Softmax и как проверять shape.',
           meta:'6 сцен · около 4 минут в спокойном темпе' },
-  end:{ title:'Основы нейросетей', text:'Сеть чередует линейные слои Z = X @ W + b и нелинейность ReLU, без которой цепочка матриц схлопывается в один слой. Выход выдаёт сырые logits, устойчивый Softmax считает вероятности, а шаг по градиенту снижает Cross-Entropy.',
-        rule:'Проверяй shape [B, in] @ [in, out] и подавай в CrossEntropyLoss строго сырые logits.' },
+  end:{ title:'Основы нейросетей', text:'Сеть чередует линейные слои Z = X @ W + b и активацию ReLU, без которой матрицы схлопываются в один слой. Выход выдаёт сырые logits, Softmax даёт вероятности, а сдвиг весов снижает Cross-Entropy.',
+        rule:'Сверяй shape [B, in] @ [in, out] и подавай в CrossEntropyLoss сырые logits.' },
   legend:[['#86A8F0', 'вход X · вероятности'], ['#F4A766', 'веса W, b · слой'], ['#3A9E4F', 'ReLU · верный класс'], ['#D9534A', 'коллапс · штраф CE']],
   cheat:DL1_CHEAT,
   scenes:DL1_SCENES });
+
+
+
+/* =========================================================================
+   DL — Lesson 2: PyTorch Tensors, Autograd, nn.Module & Dry Bean Pipeline
+   ========================================================================= */
+const DL2_SCENES = [
+{ title:'Тензоры и device', dur:18.5, poster:15.6,
+  beats:[
+    { t:.3, text:'В задаче Dry Bean (13 611 зёрен, 16 признаков, 7 сортов) батч хранит X (float32, [64, 16]) и метки y (int64, [64]).', code:'# X: float32 [64, 16] | y: int64 [64]' },
+    { t:5.8, text:'Если перенести модель на GPU или MPS, а батч X оставить на CPU, PyTorch остановит расчёт с ошибкой разных устройств!', code:'model(X_cpu)  # RuntimeError: device!', hold:3.8 },
+    { t:11.6, text:'Метод .to(device) переносит и модель, и каждый батч X, y в память одного ускорителя (cuda, mps или cpu) перед шагом.', code:'X, y = X.to(device), y.to(device)' }],
+  hud:t => t < 5.8 ? [['батч X', 'float32 [64, 16]', 'f'], ['метки y', 'int64 [64]', 'i']] : t < 11.6 ? [['модель', 'mps / cuda'], ['вход X', 'cpu → Error!']] : [['.to(device)', 'один ускоритель']],
+  frame:t => mtCam(t, 18.5),
+  draw(t, D){
+    const a0 = seg(t, .2, .8), kM = seg(t, 4.8, 5.6), kXY = seg(t, 11.6, 12.6), kErr = winK(t, 5.8, 11.4, .4, .35);
+    D.box({ x:-2.35, y:2.40, z:-.14, w:3.10, h:2.08, d:.06, color:0xE3E8F2, alpha:a0, round:.34, shadow:false, layer:0 });
+    D.text({ x:-2.35, y:3.62, z:.12, text:'Память CPU', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    D.box({ x:2.35, y:2.40, z:-.14, w:3.10, h:2.08, d:.06, color:0xDCEFE3, alpha:a0, round:.34, shadow:false, layer:0 });
+    D.text({ x:2.35, y:3.62, z:.12, text:'GPU / MPS', size:11.5, weight:700, color:GREEN_INK, alpha:a0 });
+    const mx = lerp(-2.35, 2.35, kM), xx = lerp(-2.35, 2.35, kXY), yx = lerp(-2.35, 2.35, seg(t, 11.8, 12.8));
+    D.box({ x:mx, y:3.02, z:.04, w:2.64 * a0, h:.48 * a0, d:.16, color:0xFBD9B5, round:.36, shadow:false });
+    D.text({ x:mx, y:3.02, z:.16, text:'MLP · 3 399', size:11.5, mono:true, weight:700, color:C.ink, alpha:a0 });
+    D.box({ x:xx, y:2.40, z:.04, w:2.64 * a0, h:.48 * a0, d:.16, color:0xBFD3F7, round:.36, shadow:false });
+    D.text({ x:xx, y:2.40, z:.16, text:'X: f32 [64, 16]', size:11, mono:true, weight:700, color:C.ink, alpha:a0 });
+    D.box({ x:yx, y:1.78, z:.04, w:2.64 * a0, h:.48 * a0, d:.16, color:0xDCCDF5, round:.36, shadow:false });
+    D.text({ x:yx, y:1.78, z:.16, text:'y: i64 [64]', size:11, mono:true, weight:700, color:C.ink, alpha:a0 });
+    if (kErr > .01){
+      D.line({ a:[-1.00, 2.40, .18], b:[1.00, 3.02, .18], color:'#D9534A', width:.036, dash:true, alpha:kErr, layer:60 });
+      mtChip(D, 0, 1.14, 'RuntimeError: cpu ≠ mps!', kErr, { size:11, color:'#B4573A', bg:PILL_BAD });
+    }
+    if (kXY > .01){
+      D.arrow({ a:[-.72, 2.40, .14], b:[.72, 2.40, .14], color:'#25804D', alpha:kXY });
+      mtChip(D, 0, 1.14, 'Один device: модель + X, y ✓', kXY, { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    }
+  } },
+
+{ title:'Autograd и .grad', dur:18.5, poster:15.6,
+  beats:[
+    { t:.3, text:'У всех весов модели включён флаг requires_grad=True: при прямом проходе PyTorch сам строит граф операций до loss.', code:'# param.requires_grad == True -> граф' },
+    { t:5.8, text:'Вызов loss.backward() идёт от скаляра ошибки назад по графу и записывает градиенты ∂L/∂W в поле .grad каждого слоя.', code:'loss.backward()  # считает param.grad', hold:3.8 },
+    { t:11.6, text:'Без сброса PyTorch складывает новые градиенты со старыми (grad += ...), поэтому шаг начинают с optimizer.zero_grad()!', code:'optimizer.zero_grad()  # сброс grad!' }],
+  hud:t => t < 5.8 ? [['requires_grad', 'True'], ['граф', 'динамический']] : t < 11.6 ? [['loss.backward()', '∂L/∂W → .grad']] : [['без сброса', 'grad += старый!'], ['zero_grad()', 'чистый шаг']],
+  frame:t => mtCam(t, 18.5),
+  draw(t, D){
+    const kBw = seg(t, 5.8, 6.7), kZg = seg(t, 11.6, 12.5);
+    const nodes = [
+      [-2.85, 'requires_grad', 'W · 3 399',     0xFBD9B5, .3],
+      [0.00,  'Прямой проход', 'logits [64,7]', 0xBFD3F7, .8],
+      [2.85,  'Скаляр ошибки', 'loss = 0,42',   0xFAD4D0, 1.3]
+    ];
+    nodes.forEach(([x, top, txt, col, t0]) => {
+      const p = clamp01(seg(t, t0, t0 + .55, backOut)); if (p <= .003) return;
+      D.text({ x, y:3.60, z:.12, text:top, size:11, weight:700, color:C.ink, alpha:p });
+      D.box({ x, y:3.06, z:0, w:2.24 * p, h:.52 * p, d:.18, color:col, round:.36, shadow:false });
+      D.text({ x, y:3.06, z:.14, text:txt, size:11, mono:true, weight:700, color:C.ink, alpha:p });
+    });
+    D.arrow({ a:[-1.66, 3.16, .08], b:[-1.18, 3.16, .08], color:'#3B6FD4', alpha:seg(t, .9, 1.4) });
+    D.arrow({ a:[1.18, 3.16, .08], b:[1.66, 3.16, .08], color:'#3B6FD4', alpha:seg(t, 1.4, 1.9) });
+    if (kBw > .01){
+      D.arrow({ a:[1.66, 2.94, .10], b:[1.18, 2.94, .10], color:'#D97B29', alpha:kBw });
+      D.arrow({ a:[-1.18, 2.94, .10], b:[-1.66, 2.94, .10], color:'#D97B29', alpha:kBw });
+      mtChip(D, 0, 2.42, 'loss.backward() → W.grad', kBw, { size:11, bg:PILL_HOT });
+    }
+    if (kZg > .01){
+      D.text({ x:-.72, y:1.80, z:.12, text:'Без сброса:', size:11.5, weight:700, color:'#B4573A', align:'right', alpha:kZg });
+      [[0.05, 'g₁', 0xF4A766], [1.31, '+g₂', 0xEE827A], [2.57, '+g₃', 0xD9534A]].forEach(([cx, lb, col], i) => {
+        const a = seg(t, 11.7 + i * .22, 12.2 + i * .22);
+        D.box({ x:cx, y:1.80, z:0, w:1.18 * a, h:.38 * a, d:.14, color:col, round:.32, shadow:false });
+        D.text({ x:cx, y:1.80, z:.12, text:lb, size:11, mono:true, weight:700, color:'#FFFFFF', alpha:a });
+      });
+      D.text({ x:-.72, y:1.20, z:.12, text:'zero_grad():', size:11.5, mono:true, weight:700, color:GREEN_INK, align:'right', alpha:kZg });
+      D.box({ x:.05, y:1.20, z:0, w:1.18 * kZg, h:.38 * kZg, d:.14, color:0x86CFA2, round:.32, shadow:false });
+      D.text({ x:.05, y:1.20, z:.12, text:'g₃', size:11, mono:true, weight:700, color:C.ink, alpha:kZg });
+      mtChip(D, 2.08, 1.20, 'чистый шаг ✓', seg(t, 12.2, 12.8), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    }
+  } },
+
+{ title:'Модель nn.Module', dur:18.5, poster:15.6,
+  beats:[
+    { t:.3, text:'В классе nn.Module обучаемые слои объявляют в __init__: для фасоли собираем MLP 16 → 64 → 32 → 7 на 3 399 параметров.', code:'self.fc1 = nn.Linear(16, 64)  # 1088' },
+    { t:5.8, text:'Метод forward(x) проводит батч через линейные слои с ReLU и возвращает сырые logits [64, 7] строго без Softmax!', code:'logits = self.fc3(relu(self.fc2(h1)))', hold:3.8 },
+    { t:11.6, text:'Сырые logits подают в nn.CrossEntropyLoss(), а после backward() вызов optimizer.step() обновляет веса всех трёх слоёв.', code:'loss = CE(logits, y); opt.step()' }],
+  hud:t => t < 5.8 ? [['архитектура', '16 → 64 → 32 → 7'], ['параметров', '3 399', 'i']] : t < 11.6 ? [['forward(x)', 'сырые logits [64, 7]']] : [['CrossEntropy', 'внутри LogSoftmax'], ['шаг', 'opt.step()']],
+  frame:t => mtCam(t, 18.5),
+  draw(t, D){
+    const blocks = [
+      [-3.45, 'Вход X',   '[64, 16]', '16 фич',     0xBFD3F7, 1.20, 0.96, .3],
+      [-1.72, 'fc1+ReLU', '[64, 64]', '1 088 пар.', 0xFBD9B5, 1.24, 1.14, 1.1],
+      [0.00,  'fc2+ReLU', '[64, 32]', '2 080 пар.', 0xFBD9B5, 1.24, 1.06, 5.8],
+      [1.72,  'fc3',      '[64, 7]',  '231 пар.',   0xC9EBD5, 1.22, 0.98, 6.5],
+      [3.45,  'CE Loss',  'loss',     'opt.step',   0xDCCDF5, 1.20, 0.96, 11.6]
+    ];
+    blocks.forEach(([x, nm, sh, sub, col, w, h, t0], i) => {
+      const p = seg(t, t0, t0 + .55, backOut); if (p <= .003) return;
+      const pp = clamp01(p);
+      D.box({ x, y:2.50, z:0, w:w * pp, h:h * pp, d:.22, color:col, alpha:pp, round:.38 });
+      D.text({ x, y:2.50, z:.16, text:sh, size:11, mono:true, weight:700, color:C.ink, alpha:pp });
+      D.text({ x, y:2.50 + h / 2 + .24, z:.12, text:nm, size:11.5, mono:true, weight:700, color:C.ink, alpha:pp });
+      D.text({ x, y:2.50 - h / 2 - .24, z:.12, text:sub, size:11, color:C.axis, alpha:pp });
+      if (i > 0){
+        const px = blocks[i - 1][0] + blocks[i - 1][5] / 2 + .05, nx = x - w / 2 - .05;
+        D.arrow({ a:[px, 2.50, .08], b:[nx, 2.50, .08], color:'#55607E', alpha:pp });
+      }
+    });
+    mtChip(D, 0, 1.12, 'MLP: 16 → 64 → 32 → 7 · 3 399 парам. · без Softmax', seg(t, 6.8, 7.5), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Батчи DataLoader', dur:18.5, poster:15.6,
+  beats:[
+    { t:.3, text:'Делим 13 611 зёрен на train, val и test (70 / 15 / 15%) и обучаем StandardScaler строго по обучающей части train!', code:'X_tr = scaler.fit_transform(X_train)' },
+    { t:5.8, text:'Кастомный Dataset задаёт длину выборки в __len__ и выдаёт одну пару тензоров (X[i], y[i]) по индексу в __getitem__.', code:'return self.X[idx], self.y[idx]', hold:3.8 },
+    { t:11.6, text:'Три объекта DataLoader режут выборки на батчи по 64: для train ставим shuffle=True, а для val и test — shuffle=False!', code:'DataLoader(tr_ds, 64, shuffle=True)' }],
+  hud:t => t < 5.8 ? [['Dry Bean', '13 611 зёрен', 'i'], ['сплит', '70 / 15 / 15%']] : t < 11.6 ? [['Dataset', '__len__ + __getitem__']] : [['train', '149 · shuf'], ['val/test', '32 · False']],
+  frame:t => mlCardCam(t, 18.5),
+  draw(t, D){
+    mlCards(D, t, [
+      ['1. Разбиение', '70 / 15 / 15%', ['9 527 в train', '2 042 val и test'], 0xBFD3F7, .3],
+      ['2. Масштаб', 'fit(X_train)', ['StandardScaler', 'строго по train'], 0xC9EBD5, 2.2],
+      ['3. Dataset', '__getitem__', ['__len__ длины и', 'пара (X[i], y[i])'], 0xFBD9B5, 5.8],
+      ['4. DataLoader', 'batch = 64', ['train: shuffle', 'val/test: False'], 0xDCCDF5, 11.6]
+    ]);
+  } },
+
+{ title:'train() и eval()', dur:18.5, poster:15.6,
+  beats:[
+    { t:.3, text:'В функции train_one_epoch включают model.train(): активны Dropout и статистика батча в BatchNorm, идёт запись графа.', code:'model.train()  # учим веса на батче' },
+    { t:5.8, text:'В функции evaluate вызывают model.eval() и блок with torch.no_grad(): граф не хранится в памяти, слои стабильны.', code:'model.eval(); torch.no_grad()  # val', hold:3.8 },
+    { t:11.6, text:'За 30 эпох на Dry Bean кривая val loss падает с 0,46 до 0,19, а точность валидации берёт пик 93,1% на 22-й эпохе!', code:'# Эпоха 22: val_loss=0.19, acc=93.1%' }],
+  hud:t => t < 5.8 ? [['model.train()', 'Dropout + граф']] : t < 11.6 ? [['model.eval()', '+ torch.no_grad()']] : [['лучшая эпоха', '22 из 30', 'i'], ['val acc', '93,1%', 'f']],
+  frame:t => mtCam(t, 18.5),
+  draw(t, D){
+    const wd = pd6Wide(), L = mAx(wd ? -4.10 : -3.72, 1.48, wd ? 3.22 : 2.86, 1.92, [1, 30], [.10, .95]), R = mAx(wd ? .88 : 1.18, 1.48, wd ? 3.25 : 2.92, 1.92, [1, 30], [85, 95]);
+    const a0 = seg(t, .2, .9), kEv = seg(t, 5.8, 6.8), kCur = seg(t, 11.6, 14.0), kk = lerp(.32, 1, kCur);
+    mFrame(D, L, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 15, 30], yt:[.2, .5, .8], grid:.4,
+      xlabel:'эпохи', xlA:a0, ylabel:'CE Loss', ylA:a0, ylOff:wd ? .54 : .82 });
+    D.text({ x:L.cx, y:L.y1 + .24, z:.1, text:'Кривые Train / Val Loss', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const xs = [1, 5, 10, 15, 22, 30];
+    mLine(D, L, xs, [.88, .31, .23, .20, .17, .15], { css:'#3B6FD4', lw:.045, a:seg(t, .6, 1.3), k:kk, marker:'o', ms:.062, c:0 });
+    if (kEv > .01) mLine(D, L, xs, [.46, .26, .21, .20, .19, .22], { css:'#D97B29', lw:.045, a:kEv, k:kk, marker:'o', ms:.062, c:1 });
+    mFrame(D, R, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 15, 30], yt:[86, 90, 94], grid:.4,
+      xlabel:'эпохи', xlA:a0, ylabel:'Acc, %', ylA:a0, ylOff:wd ? .50 : .74 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'Точность + no_grad()', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    mLine(D, R, xs, [86.0, 90.8, 92.2, 92.9, 93.5, 94.1], { css:'#3B6FD4', lw:.038, dash:[6, 5], a:seg(t, .8, 1.5), k:kk });
+    if (kEv > .01) mLine(D, R, xs, [87.4, 91.5, 92.4, 92.8, 93.1, 92.7], { css:'#25804D', lw:.048, a:kEv, k:kk, marker:'o', ms:.065, c:2 });
+    if (kCur > .55){
+      const kp = seg(t, 12.8, 13.5);
+      D.line({ a:[R.X(22), R.y0, .05], b:[R.X(22), R.Y(93.1), .05], color:'#25804D', width:.026, dash:true, alpha:kp, layer:57 });
+      mtChip(D, R.X(17.5), R.Y(87.2), 'пик 93,1% (эп. 22)', kp, { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    }
+  } },
+
+{ title:'Чекпоинт и test', dur:18.5, poster:15.6,
+  beats:[
+    { t:.3, text:'При рекорде val сохраняем best_checkpoint.pt: веса model_state_dict, состояние оптимизатора, эпоху и best_val_acc.', code:'torch.save(ckpt, "best_checkpoint.pt")' },
+    { t:5.8, text:'Создаём чистый экземпляр MLP, загружаем веса через load_state_dict и проверяем: logits до и после совпадают в ноль!', code:'new_model.load_state_dict(ckpt["m"])', hold:3.8 },
+    { t:11.6, text:'И только в самом финале один раз запускаем лучший чекпоинт на отложенном test (2 042 зерна) — честные 92,9% точности!', code:'acc = evaluate(new_model, test_dl)' }],
+  hud:t => t < 5.8 ? [['файл', 'best_checkpoint.pt'], ['эпоха', '22 · 93,1%', 'f']] : t < 11.6 ? [['load_state_dict', 'новый MLP'], ['Δ logits', '0,000', 'f']] : [['отложенный test', '2 042 зерна', 'i'], ['Test Acc', '92,9%', 'f']],
+  frame:t => mtCam(t, 18.5),
+  draw(t, D){
+    const aL = clamp01(seg(t, .3, .9, backOut)), aC = clamp01(seg(t, .9, 1.5, backOut)), aR = clamp01(seg(t, 5.8, 6.5, backOut));
+    D.text({ x:-2.95, y:3.24, z:.12, text:'Лучший MLP', size:11.5, weight:700, color:C.ink, alpha:aL });
+    D.box({ x:-2.95, y:2.48, z:0, w:2.02 * aL, h:.96 * aL, d:.20, color:0xBFD3F7, round:.38, shadow:false });
+    D.text({ x:-2.95, y:2.48, z:.14, text:'val = 93,1%', size:11, mono:true, weight:700, color:C.ink, alpha:aL });
+    D.arrow({ a:[-1.86, 2.48, .08], b:[-1.40, 2.48, .08], color:'#55607E', alpha:seg(t, .8, 1.3) });
+    D.text({ x:0, y:3.48, z:.12, text:'best_checkpoint.pt', size:11.5, mono:true, weight:700, color:C.ink, alpha:aC });
+    D.box({ x:0, y:2.48, z:0, w:2.64 * aC, h:1.44 * aC, d:.22, color:0xFBD9B5, round:.38, shadow:false });
+    D.text({ x:0, y:2.86, z:.14, text:'model_state_dict', size:11, mono:true, weight:700, color:C.ink, alpha:aC });
+    D.text({ x:0, y:2.48, z:.14, text:'optim_state_dict', size:11, mono:true, weight:700, color:C.axis, alpha:aC });
+    D.text({ x:0, y:2.10, z:.14, text:'epoch: 22', size:11, mono:true, weight:700, color:GREEN_INK, alpha:aC });
+    if (aR > .003){
+      D.arrow({ a:[1.40, 2.48, .08], b:[1.86, 2.48, .08], color:'#25804D', alpha:seg(t, 5.8, 6.4) });
+      D.text({ x:2.95, y:3.24, z:.12, text:'Новый MLP', size:11.5, weight:700, color:C.ink, alpha:aR });
+      D.box({ x:2.95, y:2.48, z:0, w:2.02 * aR, h:.96 * aR, d:.20, color:0xC9EBD5, round:.38, shadow:false });
+      D.text({ x:2.95, y:2.48, z:.14, text:'Δ logits = 0', size:11, mono:true, weight:700, color:GREEN_INK, alpha:aR });
+    }
+    mtChip(D, 0, 1.14, 'Финал на test (1 раз, 2 042 зерна): 92,9% ✓', seg(t, 11.6, 12.3), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } }
+];
+
+const DL2_META = [
+  { intro:'Тензоры батча и единое устройство вычислений device.',
+    key:'Признаки X хранят во float32, метки y — в int64, а модель и батч обязаны быть на одном device.',
+    keySay:'Главное. В ПайТорч признаки батча хранят во флоат-тридцать-два, целевые классы — в инт-шестьдесят-четыре, а модель и входные тензоры всегда переносят на одно и то же устройство.',
+    says:['В задаче Драй Бин — тринадцать тысяч шестьсот одиннадцать зёрен фасоли, шестнадцать признаков и семь сортов — батч в ПайТорч состоит из матрицы икс типа флоат-тридцать-два формы шестьдесят четыре на шестнадцать и вектора меток игрек типа инт-шестьдесят-четыре.',
+          'Если отправить модель на видеокарту или чип эпл эм-пи-эс, а входной тензор икс забыть в памяти процессора си-пи-ю, ПайТорч мгновенно остановит прямой проход с ошибкой конфликта устройств!',
+          'Поэтому в начале работы выбирают единый девайс, один раз переносят на него саму модель, а внутри цикла обучения вызывают ту-девайс для каждого нового батча признаков и меток!'],
+    terms:[['shape и dtype', 'X: float32 [64, 16], y: int64 [64]'], ['.to(device)', 'перенос на cpu, mps или cuda'], ['конфликт device', 'ошибка при разных устройствах']] },
+  { intro:'Динамический граф Autograd и сброс старых градиентов.',
+    key:'loss.backward() копит производные в param.grad (grad += ...), поэтому перед шагом вызывают zero_grad().',
+    keySay:'Главное. Движок аутоград строит динамический граф и при вызове бэквард прибавляет производные в поле град, поэтому перед каждым новым батчем старые градиенты сбрасывают через зеро-град.',
+    says:['Параметры слоёв в ПайТорч создаются с флагом реквайрс-град тру: во время прямого прохода движок аутоград автоматически собирает цепочку операций в динамический граф вплоть до скалярного лосса.',
+          'Один вызов лосс-бэквард проходит этот граф в обратную сторону по цепному правилу и кладёт точные производные в поле град всех трёх тысяч трёхсот девяноста девяти параметров сети!',
+          'Важная тонкость: по умолчанию аутоград прибавляет новые производные к старым в поле град! Чтобы прошлые батчи не искажали шаг спуска, перед новым расчётом всегда вызывают оптимайзер зеро-град.'],
+    terms:[['requires_grad', 'флаг записи тензора в граф'], ['loss.backward()', 'расчёт градиентов в поле .grad'], ['zero_grad()', 'обнуление градиентов перед шагом']] },
+  { intro:'Сборка MLP (16 → 64 → 32 → 7) на базе класса nn.Module.',
+    key:'Слои объявляют в __init__, а forward(x) выдаёт сырые logits без Softmax напрямую в CrossEntropyLoss.',
+    keySay:'Главное. В классе эн-эн Модуль все обучаемые слои объявляют в конструкторе инит, а метод форвард выдаёт сырые логиты без софтмакса для передачи в кросс-энтропи-лосс и шага оптимизатора.',
+    says:['Собственную нейросеть в ПайТорч оформляют как наследника класса эн-эн Модуль: в конструкторе инит регистрируют три полносвязных слоя шестнадцать, шестьдесят четыре, тридцать два и семь — три тысячи триста девяносто девять параметров.',
+          'Метод форвард задаёт движение батча: скрытые слои разделяют активацией ре-лу, а выходной линейный слой возвращает сырые логиты на семь сортов фасоли строго без софтмакса!',
+          'Эти сырые логиты вместе с метками игрек передают в кросс-энтропи-лосс, вызывают бэквард, и команда оптимайзер-степ синхронно обновляет веса всех слоёв нашего эн-эн Модуль!'],
+    terms:[['nn.Module', 'базовый класс моделей PyTorch'], ['forward(x)', 'проход батча до сырых logits'], ['optimizer.step()', 'обновление весов по .grad']] },
+  { intro:'Конвейер мини-батчей без утечки через Dataset и DataLoader.',
+    key:'Scaler учат только на train; Dataset выдаёт пары по индексу, а DataLoader собирает батчи (shuffle на train).',
+    keySay:'Главное. Масштабирование настраивают строго на трейне, класс Датасет выдаёт пары по индексу, а конвейер дата-лоадер формирует мини-батчи с перемешиванием только на обучающей выборке.',
+    says:['Перед созданием тензоров делим тринадцать тысяч шестьсот одиннадцать зёрен на трейн, вал и тест в пропорции семьдесят, пятнадцать и пятнадцать процентов, а стандард-скейлер обучаем строго по трейну без утечки!',
+          'Кастомный класс Датасет связывает массивы с ПайТорч через два метода: лен сообщает размер выборки, а гет-айтем по индексу возвращает пару тензоров признаков и сорта фасоли.',
+          'Дальше три объекта дата-лоадер нарезают выборки на батчи по шестьдесят четыре зерна: для трейна включаем шаффл тру на каждой эпохе, а для валидации и теста ставим шаффл фолс!'],
+    terms:[['Dataset', 'выборка с __len__ и __getitem__'], ['DataLoader', 'итератор батчей по 64 объекта'], ['shuffle=True', 'перемешивание только на train']] },
+  { intro:'Разделение эпохи на model.train() и evaluate с torch.no_grad().',
+    key:'model.eval() стабилизирует Dropout/BatchNorm, а torch.no_grad() отключает граф и экономит память на val.',
+    keySay:'Главное. При проверке модели включают режим эвал для стабильной работы дропаута и батч-норма, а контекст ноу-град отключает запись графа вычислений и экономит память.',
+    says:['Обучение и валидацию разделяют на две функции. В трейн-ван-эпок ставят модел-трейн: здесь дропаут случайно гасит часть нейронов, батч-норм считает статистику батча, и пишется граф для шага весов.',
+          'В функции эвалюэйт перед проверкой вызывают модел-эвал вместе с контекстом торч ноу-град: слои работают детерминированно, а память не расходуется на хранение промежуточных тензоров графа!',
+          'По кривым тридцати эпох видно, как снижаются трейн и вал лосс, а точность валидации достигает пика девяносто три и одна десятая процента на двадцать второй эпохе!'],
+    terms:[['model.train()', 'учебный режим слоёв на эпохе'], ['model.eval()', 'стабильный режим для оценки'], ['torch.no_grad()', 'отключение графа на валидации']] },
+  { intro:'Сохранение лучшего state_dict и честная проверка на test.',
+    key:'В best_checkpoint.pt хранят state_dict лучшей эпохи по val, сверяют logits и 1 раз замеряют качество на test.',
+    keySay:'Главное. Лучшую эпоху по валидации сохраняют в чекпоинт через стэйт-дикт, загружают веса в чистый экземпляр модели и ровно один раз оценивают итоговое качество на отложенном тесте.',
+    says:['Чтобы не потерять пик качества, при каждом рекорде валидации сохраняем чекпоинт бест-чекпоинт-пи-ти: в словарь записывают стэйт-дикт модели, стэйт-дикт оптимизатора, номер эпохи и лучшую точность.',
+          'После обучения создаём новый чистый экземпляр сети, загружаем сохранённый стэйт-дикт методом лоад-стэйт-дикт в режиме эвал и убеждаемся, что логиты до и после загрузки совпадают до нуля!',
+          'И только в самом финале ровно один раз запускаем восстановленный чекпоинт на отложенном тесте из двух тысяч сорока двух зёрен — получаем честные девяносто два и девять десятых процента!'],
+    terms:[['state_dict()', 'словарь весов и буферов модели'], ['load_state_dict', 'загрузка весов в новый объект'], ['честный test', 'однократный замер в конце']] }
+];
+
+const DL2_CHEAT = `<span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> Dataset, DataLoader
+
+device = torch.<span class="fn">device</span>('cuda' <span class="kw">if</span> torch.cuda.<span class="fn">is_available</span>() <span class="kw">else</span> 'mps' <span class="kw">if</span> torch.backends.mps.<span class="fn">is_available</span>() <span class="kw">else</span> 'cpu')
+
+<span class="kw">class</span> <span class="fn">BeanDataset</span>(Dataset):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, X, y):
+        self.X = torch.<span class="fn">as_tensor</span>(X, dtype=torch.float32)  <span class="c"># [N, 16]</span>
+        self.y = torch.<span class="fn">as_tensor</span>(y, dtype=torch.int64)    <span class="c"># [N]</span>
+    <span class="kw">def</span> <span class="fn">__len__</span>(self): <span class="kw">return</span> <span class="fn">len</span>(self.y)
+    <span class="kw">def</span> <span class="fn">__getitem__</span>(self, idx): <span class="kw">return</span> self.X[idx], self.y[idx]
+
+<span class="kw">class</span> <span class="fn">BeanMLP</span>(nn.Module):                                 <span class="c"># 16 → 64 → 32 → 7 (3 399 парам.)</span>
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.net = nn.<span class="fn">Sequential</span>(nn.<span class="fn">Linear</span>(16, 64), nn.<span class="fn">ReLU</span>(), nn.<span class="fn">Linear</span>(64, 32), nn.<span class="fn">ReLU</span>(), nn.<span class="fn">Linear</span>(32, 7))
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x): <span class="kw">return</span> self.<span class="fn">net</span>(x)              <span class="c"># сырые logits [B, 7] без Softmax!</span>
+
+model = <span class="fn">BeanMLP</span>().<span class="fn">to</span>(device)
+criterion = nn.<span class="fn">CrossEntropyLoss</span>()
+optimizer = torch.optim.<span class="fn">AdamW</span>(model.<span class="fn">parameters</span>(), lr=1e-3)
+
+<span class="c"># Шаг обучения (model.train) vs оценка (model.eval + torch.no_grad)</span>
+model.<span class="fn">train</span>()
+<span class="kw">for</span> X_b, y_b <span class="kw">in</span> train_loader:                             <span class="c"># shuffle=True только на train!</span>
+    X_b, y_b = X_b.<span class="fn">to</span>(device), y_b.<span class="fn">to</span>(device)
+    optimizer.<span class="fn">zero_grad</span>()                                 <span class="c"># сброс накопленных градиентов</span>
+    loss = <span class="fn">criterion</span>(<span class="fn">model</span>(X_b), y_b)
+    loss.<span class="fn">backward</span>(); optimizer.<span class="fn">step</span>()
+
+torch.<span class="fn">save</span>({'model_state_dict': model.<span class="fn">state_dict</span>(), 'optimizer_state_dict': optimizer.<span class="fn">state_dict</span>(),
+            'epoch': best_ep, 'best_val_acc': best_acc}, 'best_checkpoint.pt')`;
+
+applyMeta(DL2_SCENES, DL2_META);
+DL_LESSONS.push({ short:'PyTorch и Module', title:'PyTorch: тензоры, Autograd и nn.Module',
+  intro:{ eyebrow:'Тема 02 · Deep Learning', title:'От тензоров и Autograd до чекпоинта MLP',
+          text:'Как переносить тензоры и модель на GPU/MPS, зачем вызывать zero_grad(), как собрать MLP (16 → 64 → 32 → 7) на nn.Module, подать батчи через DataLoader и оценить чекпоинт на Dry Bean.',
+          meta:'6 сцен · около 4 минут в спокойном темпе' },
+  end:{ title:'PyTorch и nn.Module', text:'В PyTorch сеть — это класс nn.Module на одном устройстве с батчем: forward выдаёт сырые логиты, Autograd строит граф для backward, а разделение train/eval с чекпоинтом сохраняет лучшую модель без утечки.',
+        rule:'Держи один device, вызывай zero_grad() и проверяй test ровно 1 раз.' },
+  legend:[['#86A8F0', 'тензоры X · train'], ['#F4A766', 'модель · слои W, b'], ['#3A9E4F', 'GPU/MPS · пик val'], ['#D9534A', 'конфликт · старый grad']],
+  cheat:DL2_CHEAT,
+  scenes:DL2_SCENES });
 
 const DL_UPCOMING = [];
 
