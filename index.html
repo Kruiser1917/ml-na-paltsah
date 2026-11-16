@@ -15308,6 +15308,276 @@ DL_LESSONS.push({ short:'Обучение нейросетей', title:'Обуч
   cheat:DL3_CHEAT,
   scenes:DL3_SCENES });
 
+/* =========================================================================
+   DL — Lesson 4: Stabilization & Regularization (deep MLP on Fashion-MNIST subset)
+   ========================================================================= */
+const DL4_SCENES = [
+{ title:'Затухание и взрыв ∇', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'В глубокой MLP (784 → 6×256 → 10) градиент множится на производную слоя: у Sigmoid ≤ 0,25, и 0,25⁶ ≈ 2·10⁻⁴.', code:'# sigmoid: 0.25 ** 6 ≈ 0.00024' },
+    { t:6.0, text:'Если множитель слоя больше 1 (крупные веса, 1,5 на слой), сигнал наоборот растёт: 1,5⁶ ≈ 11, и шаги взрываются!', code:'# множитель 1.5: 1.5 ** 6 ≈ 11.4', hold:3.8 },
+    { t:12.0, text:'Нормы ∇ по слоям выдают проблему: у входа Sigmoid-сеть почти не учится, а ReLU с He держит ровный масштаб.', code:'gn = [p.grad.norm() for p in params]' }],
+  hud:t => t < 6.0 ? [['MLP', '784 → 6×256 → 10'], ['Sigmoid′', '≤ 0,25']] : t < 12.0 ? [['множитель 1,5', '1,5⁶ ≈ 11 ↑']] : [['слой 1 Sigmoid', '3·10⁻⁴'], ['ReLU + He', 'ровно ~0,05', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), L = mAx(wd ? -4.10 : -3.72, 1.48, wd ? 3.22 : 2.86, 1.92, [1, 6], [-4, 1.5]), R = mAx(wd ? .88 : 1.18, 1.48, wd ? 3.25 : 2.92, 1.92, [.4, 6.6], [-4.5, 0]);
+    const a0 = seg(t, .2, .9), kEx = seg(t, 6.0, 8.2), kL = seg(t, 12.0, 14.2), lg = v => v === 0 ? '1' : '1e' + v;
+    mFrame(D, L, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 3, 6], yt:[-4, -2, 0], ytl:lg, grid:.4,
+      xlabel:'глубина n слоёв', xlA:a0, ylabel:'множитель ∇', ylA:a0, ylOff:wd ? .56 : .82 });
+    D.text({ x:L.cx, y:L.y1 + .24, z:.1, text:'Произведение по глубине', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const ns = [1, 2, 3, 4, 5, 6];
+    D.line({ a:[L.x0, L.Y(0), .03], b:[L.x1, L.Y(0), .03], color:'#9AA5BA', width:.022, dash:true, alpha:a0, layer:56 });
+    mLine(D, L, ns, ns.map(n => -.602 * n), { css:'#3B6FD4', lw:.046, a:seg(t, .6, 1.2), k:seg(t, .6, 2.8), marker:'o', ms:.058, c:0 });
+    mtChip(D, L.X(3.1), L.Y(-3.35), '0,25ⁿ: затухание', seg(t, 2.4, 3.0), { mono:false, size:11, color:BLUE_INK, bg:TAG });
+    if (kEx > .01){
+      mLine(D, L, ns, ns.map(n => .176 * n), { css:'#D9534A', lw:.046, a:seg(t, 6.0, 6.6), k:kEx, marker:'o', ms:.060, c:3 });
+      mtChip(D, L.X(4.6), L.Y(.38), '1,5ⁿ: взрыв ↑', seg(t, 7.6, 8.3), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    }
+    mFrame(D, R, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 2, 3, 4, 5, 6], yt:[-4, -2, 0], ytl:lg, grid:.4,
+      xlabel:'слой (1 = вход)', xlA:a0, ylabel:'‖∇W‖ слоя', ylA:a0, ylOff:wd ? .64 : .86 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'Нормы ∇ по слоям', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    if (kL > .01){
+      [-3.5, -3.0, -2.5, -2.0, -1.5, -1.0].forEach((v, i) => mBar(D, R, i + 1, v + 4.5, { base:-4.5, k:seg(t, 12.0 + i * .2, 12.8 + i * .2), w:.5, c:0 }));
+      mLine(D, R, ns, [-1.32, -1.28, -1.30, -1.27, -1.31, -1.29], { css:'#25804D', lw:.048, a:seg(t, 13.4, 14.0), k:seg(t, 13.4, 15.0), marker:'o', ms:.062, c:2 });
+      mtChip(D, R.X(3.6), R.Y(-.45), 'ReLU + He: ровно ✓', seg(t, 14.4, 15.0), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    }
+  } },
+
+{ title:'Инициализация Xavier/He', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'При малых весах N(0; 0,01) разброс активаций гаснет к 6-му слою, а при N(0; 1) Tanh насыщается или ReLU взрывается.', code:'nn.init.normal_(W, std=0.01)  # гаснет' },
+    { t:6.0, text:'Xavier (Glorot) берёт Var(W) = 2/(fan_in + fan_out) — это сохраняет масштаб для Tanh, но под ReLU сигнал слабеет.', code:'nn.init.xavier_uniform_(W)  # Tanh', hold:3.8 },
+    { t:12.0, text:'He (Kaiming) удваивает дисперсию: Var(W) = 2/fan_in компенсирует обнулённую ReLU половину, и масштаб ровный!', code:'nn.init.kaiming_normal_(W) # ReLU' }],
+  hud:t => t < 6.0 ? [['N(0; 0,01)', 'схлопывание'], ['N(0; 1)', 'насыщение']] : t < 12.0 ? [['Xavier', '2/(in + out)', 'i']] : [['He', '2/fan_in', 'f'], ['std по слоям', '≈ 1']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), A = mAx(wd ? -4.12 : -3.75, 1.48, wd ? 4.20 : 3.78, 1.92, [1, 6], [-4, 2.2]);
+    const a0 = seg(t, .2, .9), kX = seg(t, 6.0, 8.2), kHe = seg(t, 12.0, 14.2), ns = [1, 2, 3, 4, 5, 6];
+    mFrame(D, A, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:ns, yt:[-4, -2, 0, 2], ytl:v => v === 0 ? '1' : '1e' + v, grid:.35,
+      xlabel:'слой MLP', xlA:a0, ylabel:'std активаций', ylA:a0, ylOff:wd ? .56 : .80 });
+    D.text({ x:A.cx, y:A.y1 + .24, z:.1, text:'Масштаб активаций по слоям', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    D.line({ a:[A.x0, A.Y(0), .03], b:[A.x1, A.Y(0), .03], color:'#9AA5BA', width:.022, dash:true, alpha:a0, layer:56 });
+    mLine(D, A, ns, [-.8, -1.5, -2.2, -2.9, -3.4, -3.8], { css:'#3B6FD4', lw:.044, a:seg(t, .6, 1.2), k:seg(t, .6, 2.6), marker:'o', ms:.056, c:0 });
+    mLine(D, A, ns, [.9, 1.25, 1.5, 1.7, 1.85, 1.95], { css:'#D9534A', lw:.044, a:seg(t, 2.0, 2.6), k:seg(t, 2.0, 4.0), marker:'o', ms:.056, c:3 });
+    if (kX > .01) mLine(D, A, ns, [-.15, -.3, -.45, -.6, -.75, -.9], { css:'#D97B29', lw:.044, dash:[6, 5], a:seg(t, 6.0, 6.6), k:kX, marker:'o', ms:.056, c:1 });
+    if (kHe > .01) mLine(D, A, ns, [.02, -.03, .01, -.02, .03, 0], { css:'#25804D', lw:.052, a:seg(t, 12.0, 12.6), k:kHe, marker:'o', ms:.064, c:2 });
+    const RX = wd ? 2.40 : 2.22;
+    mtChip(D, RX, 3.44, 'N(0; 1): насыщение', seg(t, 2.4, 3.0), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    mtChip(D, RX, 2.12, 'Xavier: 2/(in + out)', seg(t, 6.2, 6.8), { mono:false, size:11, bg:PILL_HOT });
+    mtChip(D, RX, 2.78, 'He: 2/fan_in ✓', seg(t, 12.2, 12.8), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    mtChip(D, RX, 1.46, 'N(0; 0,01): гаснет', seg(t, 1.0, 1.6), { mono:false, size:11, color:BLUE_INK, bg:TAG });
+  } },
+
+{ title:'BatchNorm и LayerNorm', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'BatchNorm нормирует каждый признак по батчу: столбец из B примеров приводят к μ = 0, σ = 1 и затем масштабируют γ, β.', code:'nn.BatchNorm1d(256)  # по оси батча' },
+    { t:6.0, text:'LayerNorm нормирует внутри одного объекта по всем его признакам — от батча не зависит, поэтому он стоит в Transformers.', code:'nn.LayerNorm(256)  # внутри объекта', hold:3.8 },
+    { t:12.0, text:'В train() BatchNorm берёт μ, σ текущего батча и копит running stats, а в eval() применяет уже накопленные средние!', code:'model.eval()  # BN: running_mean/var' }],
+  hud:t => t < 6.0 ? [['BatchNorm', 'столбец · по B']] : t < 12.0 ? [['LayerNorm', 'строка · 1 объект', 'i']] : [['train()', 'μ, σ батча'], ['eval()', 'running stats', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kLN = seg(t, 6.0, 6.8), kEv = seg(t, 12.0, 12.8);
+    const cs = .48, rows = 4, cols = 5, gy = 3.10, grids = [[wd ? -2.30 : -2.10, 'BatchNorm: по батчу', 0], [wd ? 2.30 : 2.05, 'LayerNorm: в объекте', 1]];
+    grids.forEach(([gx, ttl, kind]) => {
+      const ga = kind ? kLN : a0; if (ga < .01) return;
+      D.text({ x:gx, y:3.60, z:.1, text:ttl, size:11.5, weight:700, color:C.ink, alpha:ga });
+      const hot = kind ? Math.floor((t * .9) % rows) : Math.floor((t * .9) % cols);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){
+        const on = kind ? r === hot : c === hot;
+        D.box({ x:gx + (c - (cols - 1) / 2) * cs, y:gy - r * cs, z:0, w:cs * .86, h:cs * .86, d:.08, round:.3, shadow:false,
+          color:on ? (kind ? 0xC9EBD5 : 0xC9D6F7) : 0xE9ECF2, alpha:ga });
+      }
+      D.text({ x:gx, y:1.18, z:.1, text:kind ? 'строка → μ=0, σ=1' : 'столбец → μ=0, σ=1', size:11, weight:700, color:kind ? GREEN_INK : BLUE_INK, alpha:ga * (1 - kEv) });
+    });
+    mtChip(D, wd ? -2.30 : -2.10, 1.18, 'train(): μ, σ батча', kEv, { mono:false, size:11, color:'#B4573A', bg:PILL_HOT });
+    mtChip(D, wd ? 2.30 : 2.05, 1.18, 'eval(): running stats ✓', seg(t, 12.8, 13.6), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Dropout и Weight Decay', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Dropout в train() случайно гасит долю p = 0,3 нейронов, а выжившие умножает на 1/(1 − p); в eval() работают все.', code:'nn.Dropout(p=0.3)  # только в train()' },
+    { t:6.0, text:'Weight decay штрафует рост весов: AdamW на каждом шаге слегка тянет W к нулю, и сеть не заучивает шум 5 000 фото.', code:'AdamW(params, 1e-3, weight_decay=1e-2)', hold:3.8 },
+    { t:12.0, text:'Без регуляризации train loss 0,05 при val 0,66; с Dropout и decay разрыв train/val сжимается с 0,61 до 0,12!', code:'# gap: 0.61 -> 0.12 (dropout + wd)' }],
+  hud:t => t < 6.0 ? [['Dropout p', '0,3 · train()'], ['масштаб', '1/(1 − p)']] : t < 12.0 ? [['AdamW', 'weight_decay 1e-2', 'i']] : [['gap без рег.', '0,61'], ['gap с рег.', '0,12', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), R = mAx(wd ? .88 : 1.18, 1.48, wd ? 3.25 : 2.92, 1.92, [1, 30], [0, .95]);
+    const a0 = seg(t, .2, .9), kWd = seg(t, 6.0, 8.2), kGap = seg(t, 12.0, 13.2);
+    const lx = wd ? [-3.75, -2.80, -1.85, -.90] : [-3.45, -2.62, -1.79, -.96], ly = [1.62, 2.04, 2.46, 2.88, 3.30];
+    D.text({ x:(lx[0] + lx[3]) / 2, y:3.62, z:.1, text:'Dropout p = 0,3 в train()', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const tick = Math.floor(t / 1.6), off = (l, i) => l > 0 && l < 3 && ((i * 7 + l * 3 + tick * 5) % 10) < 3;
+    for (let l = 0; l < 3; l++) for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++){
+      const dead = off(l, i) || off(l + 1, j);
+      D.line({ a:[lx[l], ly[i], 0], b:[lx[l + 1], ly[j], 0], color:dead ? '#E3E6EC' : '#B9C6E6', width:.012, alpha:a0 * (dead ? .5 : .9), layer:55 });
+    }
+    lx.forEach((x, l) => ly.forEach((y, i) => D.sphere({ x, y, z:.04, r:.105, color:off(l, i) ? 0xD5D9E0 : (l === 0 ? MC[0] : l === 3 ? MC[1] : MC[2]), alpha:a0, shadow:false, layer:58 })));
+    D.text({ x:(lx[0] + lx[3]) / 2, y:1.24, z:.1, text:'серые: выключены · ×1/(1 − p)', size:11, weight:700, color:BLUE_INK, alpha:seg(t, 2.0, 2.6) });
+    mFrame(D, R, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 10, 20, 30], yt:[0, .3, .6, .9], grid:.4,
+      xlabel:'эпохи', xlA:a0, ylabel:'CE Loss', ylA:a0, ylOff:wd ? .54 : .80 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'Разрыв train / val', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const xs = [1, 5, 10, 20, 30];
+    mLine(D, R, xs, [.90, .45, .22, .10, .05], { css:'#3B6FD4', lw:.040, dash:[6, 5], a:seg(t, .8, 1.4), k:seg(t, .8, 3.0), c:0 });
+    mLine(D, R, xs, [.85, .55, .50, .56, .66], { css:'#D9534A', lw:.042, dash:[6, 5], a:seg(t, 1.0, 1.6), k:seg(t, 1.0, 3.2), c:3 });
+    if (kWd > .01){
+      mLine(D, R, xs, [.92, .56, .40, .31, .27], { css:'#3B6FD4', lw:.050, a:seg(t, 6.0, 6.6), k:kWd, marker:'o', ms:.058, c:0 });
+      mLine(D, R, xs, [.88, .57, .45, .40, .39], { css:'#25804D', lw:.052, a:seg(t, 6.2, 6.8), k:kWd, marker:'o', ms:.062, c:2 });
+    }
+    if (kGap > .01){
+      D.line({ a:[R.X(30), R.Y(.05), .05], b:[R.X(30), R.Y(.66), .05], color:'#D9534A', width:.026, dash:true, alpha:kGap, layer:57 });
+      mtChip(D, R.X(18), R.Y(.80), 'gap 0,61 → 0,12 ✓', seg(t, 12.8, 13.5), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    }
+  } },
+
+{ title:'Early Stopping', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Early stopping следит за val_loss после каждой эпохи: на 11-й эпохе рекорд 0,41, и лучшие веса сохраняются в чекпоинт.', code:'torch.save(model.state_dict(), ckpt)' },
+    { t:6.0, text:'Дальше val_loss растёт, а счётчик patience = 5 считает эпохи без нового рекорда: 1, 2, 3, 4, 5 — пора стоп.', code:'if bad_epochs >= patience: break', hold:3.8 },
+    { t:12.0, text:'На 16-й эпохе обучение останавливается, и модель восстанавливает веса лучшей 11-й эпохи, а не последней!', code:'model.load_state_dict(torch.load(ckpt))' }],
+  hud:t => t < 6.0 ? [['best val_loss', 'эп. 11 · 0,41', 'f']] : t < 12.0 ? [['patience', '5 эпох'], ['без рекорда', String(clamp(Math.floor((t - 6.0) / .9) + 1, 1, 5))]] : [['стоп', 'эп. 16'], ['веса', 'эп. 11 ✓', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), A = mAx(wd ? -4.12 : -3.75, 1.48, wd ? 4.20 : 3.78, 1.92, [.4, 20], [.1, 1.25]);
+    const a0 = seg(t, .2, .9), kPat = seg(t, 6.0, 10.5), kStop = seg(t, 12.0, 12.8);
+    mFrame(D, A, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 6, 11, 16, 20], yt:[.2, .6, 1.0], grid:.35,
+      xlabel:'эпохи', xlA:a0, ylabel:'Loss', ylA:a0, ylOff:wd ? .54 : .80 });
+    D.text({ x:A.cx, y:A.y1 + .24, z:.1, text:'Train / Val и стоп-точка', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const xs = [1, 3, 5, 7, 9, 11], xp = [11, 12, 13, 14, 15, 16];
+    mLine(D, A, xs, [1.20, .78, .58, .46, .37, .30], { css:'#3B6FD4', lw:.044, a:seg(t, .6, 1.2), k:seg(t, .6, 2.6), c:0 });
+    mLine(D, A, xs, [1.10, .74, .58, .50, .44, .41], { css:'#D97B29', lw:.048, a:seg(t, .8, 1.4), k:seg(t, .8, 2.8), marker:'o', ms:.056, c:1 });
+    mDot(D, A, 11, .41, { a:seg(t, 2.8, 3.4), r:.095, c:2, z:.12 });
+    if (kPat > .01){
+      mLine(D, A, xp, [.30, .28, .26, .24, .22, .21], { css:'#3B6FD4', lw:.044, a:seg(t, 6.0, 6.5), k:kPat, c:0 });
+      mLine(D, A, xp, [.41, .43, .44, .45, .47, .48], { css:'#D9534A', lw:.046, a:seg(t, 6.0, 6.5), k:kPat, marker:'o', ms:.056, c:3 });
+    }
+    if (kStop > .01){
+      mLine(D, A, [16, 18, 20], [.48, .54, .60], { css:'#C5CCD8', lw:.036, dash:[6, 5], a:kStop * .9, k:kStop });
+      D.line({ a:[A.X(16), A.y0, .05], b:[A.X(16), A.Y(.9), .05], color:'#D9534A', width:.026, dash:true, alpha:kStop, layer:57 });
+    }
+    const RX = wd ? 2.40 : 2.22;
+    mtChip(D, RX, 3.44, 'best: эп. 11 · 0,41', seg(t, 3.0, 3.6), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    mtChip(D, RX, 2.78, 'patience = 5', seg(t, 6.2, 6.8), { mono:false, size:11, color:BLUE_INK, bg:TAG });
+    mtChip(D, RX, 2.12, 'стоп: эп. 16', seg(t, 12.0, 12.6), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    mtChip(D, RX, 1.46, 'load best ckpt ✓', seg(t, 13.0, 13.6), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Clipping и Residual', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Редкие батчи дают всплески нормы ∇ до 5–6; clip_grad_norm_ сжимает вектор градиента до длины 1,0, сохраняя направление.', code:'clip_grad_norm_(params, max_norm=1.0)' },
+    { t:6.0, text:'Residual-блок считает x + F(x): сумма пропускает градиент по короткому пути мимо слоёв, и глубокая сеть учится.', code:'return x + self.f(x)  # skip-связь', hold:3.8 },
+    { t:12.0, text:'Init, BN, clipping и residual стабилизируют, а dropout, decay и early stopping лечат переобучение — по 1 за опыт.', code:'# 1 опыт = 1 новый приём' }],
+  hud:t => t < 6.0 ? [['пик ‖∇‖', '5,8'], ['max_norm', '1,0', 'f']] : t < 12.0 ? [['Residual', 'x + F(x)', 'i']] : [['стаб.', 'init·BN·clip·res'], ['overfit', 'drop·wd·ES', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), L = mAx(wd ? -4.10 : -3.72, 1.48, wd ? 3.22 : 2.86, 1.92, [1, 12], [0, 6.4]);
+    const a0 = seg(t, .2, .9), kClip = seg(t, 1.8, 3.6), kRes = seg(t, 6.0, 6.8), kSum = seg(t, 12.0, 12.8);
+    mFrame(D, L, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 6, 12], yt:[0, 1, 3, 6], grid:.4,
+      xlabel:'шаги', xlA:a0, ylabel:'норма ‖∇‖', ylA:a0, ylOff:wd ? .50 : .74 });
+    D.text({ x:L.cx, y:L.y1 + .24, z:.1, text:'Срез всплесков ‖∇‖', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], g = [.8, .9, 5.2, .7, .8, 3.6, .9, .6, 5.8, .8, .7, .9];
+    mLine(D, L, xs, g, { css:'#D9534A', lw:.040, dash:[6, 5], a:seg(t, .6, 1.2), k:seg(t, .6, 2.2), c:3 });
+    D.line({ a:[L.x0, L.Y(1), .05], b:[L.x1, L.Y(1), .05], color:'#25804D', width:.024, dash:true, alpha:kClip, layer:57 });
+    mLine(D, L, xs, g.map(v => Math.min(v, 1)), { css:'#25804D', lw:.050, a:kClip, k:kClip, marker:'o', ms:.054, c:2 });
+    mtChip(D, L.X(6.0), L.Y(5.7), 'max_norm = 1,0 ✓', seg(t, 3.4, 4.0), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    const cx = wd ? 2.40 : 2.55, bw = wd ? 2.10 : 1.95, blocks = [[3.30, 'x [B, 256]', 0xC9D6F7], [2.62, 'F(x): Lin→ReLU', 0xFBD9B5], [1.94, 'x + F(x)', 0xC9EBD5]];
+    blocks.forEach(([yy, txt, col], i) => {
+      const p = clamp01(seg(t, 6.0 + i * .4, 6.5 + i * .4, backOut)); if (p <= .003) return;
+      D.box({ x:cx, y:yy, z:0, w:bw * p, h:.38 * p, d:.14, color:col, round:.32, shadow:false });
+      D.text({ x:cx, y:yy, z:.12, text:txt, size:11, mono:true, weight:700, color:C.ink, alpha:p });
+      if (i > 0) D.arrow({ a:[cx, blocks[i - 1][0] - .20, .08], b:[cx, yy + .20, .08], color:'#D97B29', alpha:p });
+    });
+    const sx = cx + bw / 2 + .22, ka = seg(t, 7.6, 8.4);
+    if (ka > .01){
+      D.line({ a:[cx + bw / 2, 3.30, .08], b:[sx, 3.30, .08], color:'#25804D', width:.030, alpha:ka, layer:57 });
+      D.line({ a:[sx, 3.30, .08], b:[sx, 1.94, .08], color:'#25804D', width:.030, alpha:ka, layer:57 });
+      D.arrow({ a:[sx, 1.94, .08], b:[cx + bw / 2 + .02, 1.94, .08], color:'#25804D', alpha:ka });
+    }
+    D.text({ x:cx, y:3.62, z:.1, text:'Skip-связь x + F(x)', size:11.5, weight:700, color:C.ink, alpha:kRes });
+    mtChip(D, cx, 1.36, 'стаб. ≠ регуляризация', kSum, { mono:false, size:11, color:BLUE_INK, bg:TAG });
+  } }
+];
+
+const DL4_META = [
+  { intro:'Почему градиент гаснет или взрывается в глубокой сети.',
+    key:'Градиент — произведение производных по глубине: множители < 1 гасят его, > 1 взрывают; нормы по слоям это показывают.',
+    keySay:'Главное. Градиент в глубокой сети — это произведение производных всех слоёв: множители меньше единицы его гасят, больше единицы — взрывают, а нормы градиента по слоям сразу показывают проблему.',
+    says:['Возьмём глубокую сеть: семьсот восемьдесят четыре входа, шесть скрытых слоёв по двести пятьдесят шесть нейронов и десять классов, пять тысяч картинок фэшн эм-эн-ай-эс-ти. Градиент у входа — произведение производных всех слоёв. У сигмоиды производная не больше четверти, и через шесть слоёв остаются две десятитысячных — это ванишинг градиентс.',
+          'Обратная ситуация — когда множитель слоя больше единицы, например из-за крупных весов. Полтора в шестой степени — уже одиннадцать, градиент раздувается от слоя к слою, и шаги оптимизатора улетают. Это эксплоудинг градиентс.',
+          'Диагноз ставят по нормам градиента каждого слоя. У сигмоидной сети первые слои получают градиент в тысячи раз меньше последних и почти не учатся, а сеть на РеЛУ с правильной инициализацией держит ровный масштаб по всей глубине.'],
+    terms:[['Vanishing', '0,25ⁿ → градиент гаснет'], ['Exploding', 'множитель > 1 → взрыв'], ['‖∇W‖ по слоям', 'диагностика глубины']] },
+  { intro:'Xavier и He задают масштаб весов под функцию активации.',
+    key:'Xavier: Var = 2/(fan_in + fan_out) для Tanh; He: Var = 2/fan_in для ReLU — масштаб активаций по слоям ровный.',
+    keySay:'Главное. Инициализация задаёт дисперсию весов так, чтобы сигнал не гас и не раздувался: ксавье для танга, хе-инициализация для РеЛУ.',
+    says:['Всё начинается со стартовых весов. Если взять слишком маленький разброс, одну сотую, то разброс активаций сжимается в каждом слое и к шестому почти схлопывается в ноль. А слишком большой разброс, единица, загоняет танг в насыщение, а РеЛУ в раздувание.',
+          'Инициализация ксавье, или глорот, выбирает дисперсию весов два, делённое на сумму входов и выходов слоя. Для танга масштаб сохраняется, но под РеЛУ, которая обнуляет половину значений, сигнал всё равно понемногу слабеет.',
+          'Поэтому для РеЛУ используют хе-инициализацию, она же кайминг: дисперсия два, делённое на число входов. Удвоение компенсирует обнулённую половину, и разброс активаций остаётся около единицы на всех шести слоях.'],
+    terms:[['Xavier', 'Var = 2/(in + out), Tanh'], ['He (Kaiming)', 'Var = 2/fan_in, ReLU'], ['std ≈ 1', 'стабильный масштаб слоёв']] },
+  { intro:'BatchNorm по батчу против LayerNorm внутри объекта.',
+    key:'BatchNorm нормирует признак по батчу и в eval() берёт running stats; LayerNorm нормирует внутри объекта и от батча не зависит.',
+    keySay:'Главное. Батч-норм нормирует каждый признак по примерам батча и ведёт себя по-разному в трейне и эвале, а лэйер-норм нормирует признаки внутри одного объекта и не зависит от размера батча.',
+    says:['Нормализация держит активации в рабочем масштабе прямо во время обучения. Батч-норм берёт один признак, то есть столбец, у всех примеров батча, вычитает среднее, делит на стандартное отклонение, а затем обучаемые гамма и бета возвращают нужный масштаб.',
+          'Лэйер-норм поворачивает ось: он нормирует строку — все признаки одного объекта. Статистика батча ему не нужна, поэтому он одинаково работает с батчем из одного примера и с последовательностями разной длины. Именно его ставят в трансформерах.',
+          'Важная ловушка батч-норма — режимы. В режиме трейн он считает среднее и разброс текущего батча и копит скользящие средние, а в режиме эвал использует уже накопленные. Забыли вызвать модел эвал — предсказания будут плавать.'],
+    terms:[['BatchNorm', 'по батчу, running stats'], ['LayerNorm', 'внутри объекта, Transformers'], ['train()/eval()', 'разное поведение BN']] },
+  { intro:'Dropout и weight decay сокращают разрыв train и val.',
+    key:'Dropout гасит нейроны только в train() с масштабом 1/(1 − p), weight decay в AdamW штрафует рост весов — разрыв train/val сжимается.',
+    keySay:'Главное. Дропаут случайно отключает нейроны только во время обучения, а вэйт-дикей не даёт весам расти, и вместе они сокращают разрыв между трейном и валидацией.',
+    says:['На пяти тысячах картинок глубокая сеть быстро заучивает примеры наизусть. Дропаут в режиме трейн на каждом шаге случайно выключает тридцать процентов нейронов, а выжившие умножает на единицу, делённую на ноль семь, чтобы средний сигнал не менялся. В эвале работают все нейроны.',
+          'Второй приём — вэйт-дикей. Оптимизатор адам-дабл-ю на каждом шаге слегка тянет веса к нулю, отдельно от градиента. Крупным весам становится невыгодно расти, и сеть не подстраивается под шум конкретных картинок.',
+          'Результат видно по кривым. Без регуляризации трейн лосс падает до пяти сотых, а валидация разворачивается вверх до ноль шестидесяти шести. С дропаутом и вэйт-дикеем разрыв сжимается с ноль шестидесяти одного до ноль двенадцати.'],
+    terms:[['Dropout p = 0.3', 'только train(), ×1/(1 − p)'], ['weight_decay', 'штраф роста весов, AdamW'], ['generalization gap', 'разрыв train/val']] },
+  { intro:'Early stopping с patience и восстановлением лучших весов.',
+    key:'Сохраняем чекпоинт на рекорде val_loss, ждём patience эпох без улучшения, останавливаемся и восстанавливаем лучшие веса.',
+    keySay:'Главное. Эрли-стоппинг сохраняет веса на лучшей эпохе по валидации, ждёт заданное число эпох без улучшения и возвращает модель к лучшему чекпоинту.',
+    says:['Эрли-стоппинг превращает кривую валидации в правило остановки. После каждой эпохи сравниваем вал лосс с рекордом: на одиннадцатой эпохе он равен ноль сорока одной, и мы сразу сохраняем веса в чекпоинт.',
+          'Дальше трейн лосс продолжает падать, а валидация растёт — сеть начинает переобучаться. Счётчик пэйшенс равен пяти: считаем эпохи без нового рекорда, один, два, три, четыре, пять.',
+          'На шестнадцатой эпохе терпение кончилось — обучение останавливается. Но последние веса уже хуже, поэтому загружаем чекпоинт одиннадцатой эпохи. Так мы экономим время и получаем лучшую модель, а не последнюю.'],
+    terms:[['best val_loss', 'эпоха 11, чекпоинт'], ['patience = 5', 'эпохи без рекорда'], ['load best', 'возврат лучших весов']] },
+  { intro:'Gradient clipping, residual-связи и итог урока.',
+    key:'Clipping срезает всплески нормы до max_norm, residual x + F(x) даёт градиенту короткий путь; меняем по 1 приёму за опыт.',
+    keySay:'Главное. Градиент-клиппинг и резидуал-связи стабилизируют обучение, а дропаут, вэйт-дикей и эрли-стоппинг лечат переобучение — и вводить их нужно по одному.',
+    says:['Даже в хорошей сети отдельные батчи дают всплески нормы градиента до пяти-шести. Градиент-клиппинг с макс норм единица сжимает весь вектор градиента до длины один, сохраняя направление, и шаг оптимизатора не улетает.',
+          'Второй стабилизатор — резидуал-связь. Блок возвращает икс плюс эф от икс: при обратном проходе градиент идёт по сумме напрямую, мимо слоёв, и даже очень глубокая сеть не теряет сигнал у входа.',
+          'Подведём итог. Инициализация, батч-норм, клиппинг и резидуал отвечают за стабильность обучения, а дропаут, вэйт-дикей и эрли-стоппинг лечат переобучение. Добавляйте их по одному и сравнивайте по валидации, иначе не поймёте, что сработало.'],
+    terms:[['clip_grad_norm_', 'срез нормы до 1,0'], ['Residual', 'x + F(x), короткий путь ∇'], ['1 приём за опыт', 'честное сравнение']] }
+];
+
+const DL4_CHEAT = `<span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="c"># 1. Блок: Linear + BatchNorm + ReLU + Dropout, residual x + F(x)</span>
+<span class="kw">class</span> <span class="fn">ResBlock</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d=256, p=0.3):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.f = nn.<span class="fn">Sequential</span>(nn.<span class="fn">Linear</span>(d, d), nn.<span class="fn">BatchNorm1d</span>(d), nn.<span class="fn">ReLU</span>(), nn.<span class="fn">Dropout</span>(p))
+        nn.init.<span class="fn">kaiming_normal_</span>(self.f[0].weight, nonlinearity='relu')  <span class="c"># He: Var = 2/fan_in</span>
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="kw">return</span> x + self.<span class="fn">f</span>(x)                                  <span class="c"># короткий путь градиента</span>
+
+model = nn.<span class="fn">Sequential</span>(nn.<span class="fn">Flatten</span>(), nn.<span class="fn">Linear</span>(784, 256), *[<span class="fn">ResBlock</span>() <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(6)], nn.<span class="fn">Linear</span>(256, 10))
+optimizer = torch.optim.<span class="fn">AdamW</span>(model.<span class="fn">parameters</span>(), lr=1e-3, weight_decay=1e-2)
+
+<span class="c"># 2. Шаг: clipping нормы градиента перед step()</span>
+model.<span class="fn">train</span>()                                              <span class="c"># Dropout вкл., BN по батчу</span>
+optimizer.<span class="fn">zero_grad</span>(); <span class="fn">criterion</span>(<span class="fn">model</span>(X_b), y_b).<span class="fn">backward</span>()
+nn.utils.<span class="fn">clip_grad_norm_</span>(model.<span class="fn">parameters</span>(), max_norm=1.0)
+optimizer.<span class="fn">step</span>()
+
+<span class="c"># 3. Early stopping по val_loss (model.eval(): BN running stats, Dropout выкл.)</span>
+<span class="kw">if</span> val_loss &lt; best: best, bad = val_loss, 0; torch.<span class="fn">save</span>(model.<span class="fn">state_dict</span>(), 'best.pt')
+<span class="kw">else</span>: bad += 1
+<span class="kw">if</span> bad &gt;= 5: model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>('best.pt'))  <span class="c"># patience = 5 → стоп</span>`;
+
+applyMeta(DL4_SCENES, DL4_META);
+DL_LESSONS.push({ short:'Стабилизация сетей', title:'Стабилизация и регуляризация',
+  intro:{ eyebrow:'Тема 04 · Deep Learning', title:'Как удержать глубокую сеть в рабочем режиме',
+          text:'Почему градиент гаснет или взрывается, как Xavier и He задают масштаб весов, чем BatchNorm отличается от LayerNorm, как Dropout, weight decay и early stopping лечат переобучение глубокой MLP на Fashion-MNIST.',
+          meta:'6 сцен · около 4 минут в спокойном темпе' },
+  end:{ title:'Стабильность и обобщение', text:'Глубокую сеть сначала делают устойчивой: He-инициализация, нормализация, clipping и residual держат масштаб сигнала и градиента. Затем лечат переобучение: dropout, weight decay и early stopping сжимают разрыв train/val.',
+        rule:'Сначала стабилизируй, потом регуляризуй, вводи 1 приём за опыт.' },
+  legend:[['#86A8F0', 'гаснет · train'], ['#F4A766', 'Xavier · val'], ['#3A9E4F', 'He · рабочий режим'], ['#D9534A', 'взрыв · переобучение']],
+  cheat:DL4_CHEAT,
+  scenes:DL4_SCENES });
+
 const DL_UPCOMING = [];
 
 const UPCOMING = [];
