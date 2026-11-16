@@ -15578,6 +15578,318 @@ DL_LESSONS.push({ short:'Стабилизация сетей', title:'Стаби
   cheat:DL4_CHEAT,
   scenes:DL4_SCENES });
 
+/* =========================================================================
+   DL — Lesson 5: CNN & Transfer Learning (Cats vs Dogs, illustrative numbers)
+   ========================================================================= */
+// контур прямоугольника линиями (без label-текстур)
+function dl5Rect(D, cx, cy, w, h, o = {}){
+  const a = o.a ?? 1; if (a < .01) return;
+  const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2, z = o.z ?? .06;
+  [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]].forEach(([ax, ay, bx, by]) =>
+    D.line({ a:[ax, ay, z], b:[bx, by, z], color:o.color ?? '#3B6FD4', width:o.lw ?? .03, dash:o.dash, alpha:a, layer:o.layer ?? 57 }));
+}
+// иконка «фото»: рамка + горы + солнце; flip / rot (град.) / zoom (crop) / tint (jitter)
+function dl5Photo(D, cx, cy, s, o = {}){
+  const a = o.a ?? 1; if (a < .01) return;
+  const fx = o.flip ? -1 : 1, r = (o.rot ?? 0) * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r), k = o.zoom ?? 1;
+  const T = (u, v) => [cx + (u * fx * c - v * sn) * s, cy + (u * fx * sn + v * c) * s, .06];
+  const P = (u, v) => T(clamp(u * k, -.5, .5), clamp(v * k, -.5, .5));
+  const fr = [T(-.5, -.5), T(.5, -.5), T(.5, .5), T(-.5, .5)], col = o.tint ?? '#3B6FD4';
+  fr.forEach((p, i) => D.line({ a:p, b:fr[(i + 1) % 4], color:'#7D869B', width:.026, alpha:a, layer:57 }));
+  const m = [[-.45, -.38], [-.15, .06], [.05, -.14], [.26, .2], [.45, -.38]].map(([u, v]) => P(u, v));
+  for (let i = 0; i < m.length - 1; i++) D.line({ a:m[i], b:m[i + 1], color:col, width:.034, alpha:a, layer:58 });
+  const sp = T(clamp(-.28 * k, -.36, .36), clamp(.3 * k, -.36, .36)); D.sphere({ x:sp[0], y:sp[1], z:.07, r:.06 * s / .62, color:o.sun ?? 0xF4A766, alpha:a, shadow:false, layer:58 });
+}
+const DL5_SCENES = [
+{ title:'Почему не MLP', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'MLP видит фото 224×224×3 как 150 528 независимых чисел: слой на 512 нейронов — это уже около 77 млн весов.', code:'nn.Linear(224 * 224 * 3, 512)  # 77 млн' },
+    { t:6.0, text:'CNN берёт 1 маленький фильтр 3×3 и прикладывает его ко всем участкам фото: одни и те же 27 весов на каждом шаге.', code:'nn.Conv2d(3, 32, kernel_size=3)', hold:3.8 },
+    { t:12.0, text:'Общие веса и локальность: 32 фильтра стоят всего 896 параметров, а кошачье ухо узнаётся в любом месте кадра!', code:'# 3·3·3·32 + 32 = 896 параметров' }],
+  hud:t => t < 6.0 ? [['вход', '150 528'], ['Linear → 512', '≈ 77 млн']] : t < 12.0 ? [['фильтр', '3×3×3 = 27', 'i']] : [['Conv, 32 ф.', '896', 'f'], ['MLP', '77 млн']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kC = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8);
+    const gx = wd ? -2.95 : -2.70, gy = 2.45, cs = .32, n = 6, pal = [0xC9D6F7, 0xFBD9B5, 0xE9ECF2, 0xC9EBD5];
+    const cx = j => gx + (j - (n - 1) / 2) * cs, cy = i => gy + ((n - 1) / 2 - i) * cs;
+    D.text({ x:gx, y:3.62, z:.1, text:'Фото как сетка пикселей', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++)
+      D.box({ x:cx(j), y:cy(i), z:0, w:cs * .88, h:cs * .88, d:.06, round:.25, shadow:false, color:pal[(i * 3 + j * 5 + (i > 2 && j > 2 ? 1 : 0)) % 4], alpha:a0 });
+    const nx = wd ? -.55 : -.62, mA = seg(t, .8, 1.6) * (1 - kC);
+    if (mA > .01){
+      const ny = [3.05, 2.65, 2.25, 1.85];
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) ny.forEach(y => D.line({ a:[cx(j), cy(i), .02], b:[nx, y, .02], color:'#B9C6E6', width:.006, alpha:mA * .45, layer:55 }));
+      ny.forEach(y => D.sphere({ x:nx, y, z:.04, r:.1, color:MC[0], alpha:mA, shadow:false, layer:58 }));
+    }
+    if (kC > .01){
+      const st = Math.floor(Math.max(0, t - 6.4) / .7) % 16, wr = Math.floor(st / 4), wc = st % 4, fs = .30;
+      dl5Rect(D, cx(wc + 1), cy(wr + 1), cs * 3, cs * 3, { color:'#D97B29', lw:.04, a:kC, z:.08 });
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++){
+        const done = t >= 12.0 || i * 4 + j <= st;
+        D.box({ x:nx + (j - 1.5) * fs, y:2.45 + (1.5 - i) * fs, z:0, w:fs * .86, h:fs * .86, d:.06, round:.25, shadow:false, color:done ? 0xFBD9B5 : 0xE9ECF2, alpha:kC });
+      }
+      D.text({ x:nx, y:3.25, z:.1, text:'feature map', size:11, weight:700, color:'#B4573A', alpha:kC });
+      if (t < 12.0) D.arrow({ a:[cx(wc + 1) + cs * 1.5, cy(wr + 1), .1], b:[nx + (wc - 1.5) * fs - fs * .5, 2.45 + (1.5 - wr) * fs, .1], color:'#D97B29', alpha:kC });
+    }
+    D.text({ x:gx, y:1.18, z:.1, text:'MLP: пиксель → нейроны', size:11, weight:700, color:BLUE_INK, alpha:seg(t, 2.0, 2.6) * (1 - kC) });
+    D.text({ x:gx, y:1.18, z:.1, text:'CNN: 1 фильтр на всё фото', size:11, weight:700, color:'#B4573A', alpha:kC * (1 - kS) });
+    D.text({ x:gx, y:1.18, z:.1, text:'общие веса · локальность', size:11, weight:700, color:GREEN_INK, alpha:kS });
+    const RX = wd ? 2.40 : 2.22;
+    mtChip(D, RX, 3.44, 'вход: 150 528 чисел', seg(t, .8, 1.4), { mono:false, size:11, color:BLUE_INK, bg:TAG });
+    mtChip(D, RX, 2.78, 'MLP → 512: ≈ 77 млн', seg(t, 2.4, 3.0), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    mtChip(D, RX, 2.12, 'Conv 3×3: 27 весов', seg(t, 6.4, 7.0), { mono:false, size:11, bg:PILL_HOT });
+    mtChip(D, RX, 1.46, '32 фильтра: 896 ✓', seg(t, 12.2, 12.8), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Свёртка и feature map', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Ядро 3×3 скользит по картинке: в каждом окне перемножаем 9 пар чисел и складываем — выходит 1 клетка feature map.', code:'out[i, j] = (patch * kernel).sum()' },
+    { t:6.0, text:'Веса фильтра учатся сами: один находит вертикальные края, другой — горизонтальные, третий — шерсть и текстуры.', code:'# фильтр = обучаемые веса 3×3×C_in', hold:3.8 },
+    { t:12.0, text:'Каналы: RGB даёт 3 входных канала, фильтр видит все 3 сразу, а каждый из 32 фильтров даёт 1 выходной канал.', code:'nn.Conv2d(3, 32, 3, padding=1)' }],
+  hud:t => t < 6.0 ? [['ядро', '3×3'], ['клетка', 'Σ 9 произв.']] : t < 12.0 ? [['фильтры', 'края · текстуры', 'i']] : [['C_in', '3 (RGB)'], ['C_out', '32', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kF = seg(t, 6.0, 6.8), kCh = seg(t, 12.0, 12.8), cs = .36;
+    const gx = wd ? -2.55 : -2.30, ox = wd ? 2.55 : 2.30, gy = 2.55, img = [0, 0, 1, 1, 1], ker = [-1, 0, 1], out = [3, 3, 0];
+    const st = clamp(Math.floor((t - 1.0) / .55), 0, 8), wr = Math.floor(st / 3), wc = st % 3;
+    const grid = (x0, n, f) => { for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) f(x0 + (j - (n - 1) / 2) * cs, gy + ((n - 1) / 2 - i) * cs, i, j); };
+    [[1, 0xF6C9C9], [2, 0xC9EBD5]].forEach(([l, col]) => {
+      D.box({ x:gx + l * .08, y:gy - l * .08, z:-.06 * l, w:cs * 5, h:cs * 5, d:.04, round:.1, shadow:false, color:col, alpha:kCh, layer:.5 - l * .1 });
+      D.box({ x:ox + l * .08, y:gy - l * .08, z:-.06 * l, w:cs * 3, h:cs * 3, d:.04, round:.1, shadow:false, color:l === 1 ? 0xFBD9B5 : 0xC9D6F7, alpha:kCh, layer:.5 - l * .1 });
+    });
+    grid(gx, 5, (x, y, i, j) => {
+      const inW = i >= wr && i < wr + 3 && j >= wc && j < wc + 3 && t < 6.0;
+      D.box({ x, y, z:0, w:cs * .88, h:cs * .88, d:.06, round:.25, shadow:false, color:inW ? 0xFBD9B5 : (img[j] ? 0xC9D6F7 : 0xE9ECF2), alpha:a0 });
+      D.text({ x, y, z:.08, text:String(img[j]), size:11, mono:true, weight:700, color:C.ink, alpha:a0 });
+    });
+    if (t < 6.0) dl5Rect(D, gx + (wc - 1) * cs, gy + (1 - wr) * cs, cs * 3, cs * 3, { color:'#D97B29', lw:.04, a:seg(t, 1.0, 1.4), z:.1 });
+    grid(0, 3, (x, y, i, j) => {
+      D.box({ x, y, z:0, w:cs * .88, h:cs * .88, d:.06, round:.25, shadow:false, color:0xFBD9B5, alpha:seg(t, .5, 1.1) });
+      D.text({ x, y, z:.08, text:String(ker[j]), size:11, mono:true, weight:700, color:C.ink, alpha:seg(t, .5, 1.1) });
+    });
+    grid(ox, 3, (x, y, i, j) => {
+      const on = i * 3 + j <= st && t >= 1.0;
+      D.box({ x, y, z:0, w:cs * .88, h:cs * .88, d:.06, round:.25, shadow:false, color:on ? (out[j] ? 0xC9EBD5 : 0xE9ECF2) : 0xF3F5F9, alpha:a0 });
+      if (on) D.text({ x, y, z:.08, text:String(out[j]), size:11, mono:true, weight:700, color:C.ink, alpha:a0 });
+    });
+    D.text({ x:(gx + cs * 2.5 - cs * 1.5) / 2, y:gy, z:.1, text:'∗', size:12.5, weight:700, color:C.ink, alpha:a0 });
+    D.text({ x:(cs * 1.5 + ox - cs * 1.5) / 2, y:gy, z:.1, text:'=', size:12.5, weight:700, color:C.ink, alpha:a0 });
+    [[gx, 'вход 5×5'], [0, 'ядро 3×3'], [ox, 'feature map']].forEach(([x, s]) => D.text({ x, y:3.62, z:.1, text:s, size:11.5, weight:700, color:C.ink, alpha:a0 }));
+    D.text({ x:ox, y:1.40, z:.1, text:'край найден: 3, 3, 0', size:11, weight:700, color:GREEN_INK, alpha:seg(t, 5.2, 5.8) * (1 - kF) });
+    [[gx, 'фильтр 1: верт. края'], [0, 'фильтр 2: гориз.'], [ox, 'фильтр 3: текстура']].forEach(([x, s], i) =>
+      mtChip(D, x, 1.30, s, seg(t, 6.2 + i * 1.2, 6.8 + i * 1.2) * (1 - kCh), { mono:false, size:11, color:BLUE_INK, bg:TAG }));
+    [[gx, 'RGB: C_in = 3'], [0, 'ядро 3×3×3'], [ox, '32 фильтра → C_out 32']].forEach(([x, s], i) =>
+      mtChip(D, x, 1.30, s, seg(t, 12.4 + i * .8, 13.0 + i * .8), { mono:false, size:11, color:i === 2 ? GREEN_INK : BLUE_INK, bg:i === 2 ? PILL_OK : TAG }));
+  } },
+
+{ title:'Stride и pooling', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Размер выхода считают по формуле (H + 2P − K) / S + 1: при K = 3, P = 1 и S = 1 картинка 128 остаётся 128.', code:'# (128 + 2·1 − 3) / 1 + 1 = 128' },
+    { t:6.0, text:'Stride 2 или MaxPool 2×2 вдвое уменьшают сторону: из каждого квадрата 2×2 остаётся только максимум, 128 → 64.', code:'nn.MaxPool2d(2)  # 128 -> 64', hold:3.8 },
+    { t:12.0, text:'Блок conv + pool удваивает каналы и делит сторону пополам: [3,128,128] → [32,64,64] → … → [128,16,16].', code:'x.shape  # [B, 128, 16, 16]' }],
+  hud:t => t < 6.0 ? [['K · P · S', '3 · 1 · 1'], ['H', '128 → 128']] : t < 12.0 ? [['MaxPool', '2×2', 'i'], ['H', '128 → 64']] : [['каналы', '3 → 128'], ['сторона', '128 → 16', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kP = seg(t, 6.0, 6.8), kT = seg(t, 12.0, 12.8);
+    const lc = wd ? -2.25 : -2.10, cs = .30, mx = lc - 1.0, px = lc + .95, my = 1.90;
+    D.text({ x:lc, y:3.62, z:.1, text:'Формула и MaxPool 2×2', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    mtChip(D, lc, 3.20, '(H + 2P − K) / S + 1', seg(t, .6, 1.2), { size:11, bg:PILL_HOT });
+    D.text({ x:lc, y:2.78, z:.1, text:'K3 · P1 · S1: 128 → 128', size:11, weight:700, color:BLUE_INK, alpha:seg(t, 2.0, 2.6) * (1 - kP) });
+    D.text({ x:lc, y:2.78, z:.1, text:'K2 · S2: 128 → 64', size:11, weight:700, color:'#B4573A', alpha:kP });
+    const v = [[1, 3, 2, 0], [4, 2, 1, 1], [0, 1, 5, 2], [2, 1, 3, 6]], qc = [0xC9D6F7, 0xFBD9B5, 0xC9EBD5, 0xF6C9C9];
+    if (kP > .01){
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++){
+        const q = (i > 1 ? 2 : 0) + (j > 1 ? 1 : 0), x = mx + (j - 1.5) * cs, y = my + (1.5 - i) * cs;
+        const big = v[i][j] === Math.max(...v.slice(i > 1 ? 2 : 0, i > 1 ? 4 : 2).flatMap(r => r.slice(j > 1 ? 2 : 0, j > 1 ? 4 : 2)));
+        D.box({ x, y, z:0, w:cs * .88, h:cs * .88, d:.06, round:.25, shadow:false, color:qc[q], alpha:kP });
+        D.text({ x, y, z:.08, text:String(v[i][j]), size:11, mono:true, weight:big ? 800 : 500, color:big ? C.ink : M_INK, alpha:kP });
+      }
+      const kO = seg(t, 7.4, 8.2);
+      D.arrow({ a:[mx + cs * 2.2, my, .08], b:[px - cs * 1.3, my, .08], color:'#D97B29', alpha:kO });
+      [[4, 2], [2, 6]].forEach((r, i) => r.forEach((val, j) => {
+        const x = px + (j - .5) * cs, y = my + (.5 - i) * cs;
+        D.box({ x, y, z:0, w:cs * .88, h:cs * .88, d:.06, round:.25, shadow:false, color:qc[i * 2 + j], alpha:kO });
+        D.text({ x, y, z:.08, text:String(val), size:11, mono:true, weight:800, color:C.ink, alpha:kO });
+      }));
+    }
+    const tx = wd ? 2.30 : 2.15, rows = [['[3, 128, 128]', 2.10], ['[32, 64, 64]', 1.90], ['[64, 32, 32]', 1.70], ['[128, 16, 16]', 1.62]], ry = [3.20, 2.58, 1.96, 1.34];
+    D.text({ x:tx, y:3.62, z:.1, text:'Shape по блокам', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    rows.forEach(([s, w], i) => {
+      const p = i === 0 ? a0 : clamp01(seg(t, 12.0 + i * .7, 12.6 + i * .7, backOut)); if (p <= .003) return;
+      D.box({ x:tx, y:ry[i], z:0, w:w * p, h:.36 * p, d:.1, round:.3, shadow:false, color:i === 3 ? 0xC9EBD5 : i === 0 ? 0xC9D6F7 : 0xFBD9B5 });
+      D.text({ x:tx, y:ry[i], z:.12, text:s, size:11, mono:true, weight:700, color:C.ink, alpha:p });
+      if (i > 0) D.arrow({ a:[tx, ry[i - 1] - .2, .08], b:[tx, ry[i] + .2, .08], color:'#D97B29', alpha:p });
+    });
+  } },
+
+{ title:'Receptive field', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Активация 1-го слоя видит лишь окно 3×3; 2-й слой смотрит на 3×3 таких активаций — это 5×5 пикселей, 3-й — 7×7.', code:'# RF: 3 → 5 → 7 (+2 на conv 3×3)' },
+    { t:6.0, text:'Pooling удваивает шаг сетки, и каждый следующий conv захватывает вдвое шире: 3 → 8 → 18 → 38 пикселей.', code:'# с MaxPool: 3 → 8 → 18 → 38', hold:3.8 },
+    { t:12.0, text:'Так растёт иерархия: ранние слои ловят края, средние — глаз и ухо, а глубокие видят всю морду кошки или собаки.', code:'# края → части морды → объект' }],
+  hud:t => t < 6.0 ? [['слой 1', 'RF 3'], ['слой 3', 'RF 7']] : t < 12.0 ? [['+ MaxPool', 'RF 38', 'i']] : [['ранние', 'края'], ['глубокие', 'объект', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), L = mAx(wd ? -4.10 : -3.72, 1.48, wd ? 3.22 : 2.86, 1.92, [.6, 6.4], [0, 170]);
+    const a0 = seg(t, .2, .9), kP = seg(t, 6.0, 8.4), kH = seg(t, 12.0, 12.8), ns = [1, 2, 3, 4, 5, 6];
+    mFrame(D, L, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:ns, yt:[0, 40, 80, 120, 160], grid:.4,
+      xlabel:'слой conv', xlA:a0, ylabel:'RF, пикс.', ylA:a0, ylOff:wd ? .56 : .82 });
+    D.text({ x:L.cx, y:L.y1 + .24, z:.1, text:'Рост receptive field', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    mLine(D, L, ns, [3, 5, 7, 9, 11, 13], { css:'#3B6FD4', lw:.046, a:seg(t, .6, 1.2), k:seg(t, .6, 3.0), marker:'o', ms:.056, c:0 });
+    if (kP > .01) mLine(D, L, ns, [3, 8, 18, 38, 78, 158], { css:'#D97B29', lw:.048, a:seg(t, 6.0, 6.6), k:kP, marker:'o', ms:.058, c:1 });
+    mtChip(D, L.X(2.7), L.Y(100), 'conv 3×3: +2', seg(t, 2.6, 3.2), { mono:false, size:11, color:BLUE_INK, bg:TAG });
+    mtChip(D, L.X(2.7), L.Y(145), 'с pool: шаг ×2', seg(t, 8.0, 8.6), { mono:false, size:11, color:'#B4573A', bg:PILL_HOT });
+    const sx = wd ? 2.45 : 2.25, sy = 2.38, sc = 2.0 / 38;
+    D.text({ x:sx, y:3.62, z:.1, text:'Что видит 1 активация', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    D.box({ x:sx, y:sy, z:-.04, w:2.1, h:2.1, d:.02, round:.05, shadow:false, color:0xF3F5F9, alpha:a0 });
+    D.sphere({ x:sx, y:sy, z:.08, r:.045, color:0xD9534A, alpha:a0, shadow:false, layer:58 });
+    [[3, .6], [5, 2.2], [7, 3.8]].forEach(([rf, t0]) => dl5Rect(D, sx, sy, rf * sc, rf * sc, { color:'#3B6FD4', lw:.026, a:seg(t, t0, t0 + .6) }));
+    [[8, 6.4], [18, 7.6], [38, 8.8]].forEach(([rf, t0]) => dl5Rect(D, sx, sy, rf * sc, rf * sc, { color:'#D97B29', lw:.032, a:seg(t, t0, t0 + .6) }));
+    D.text({ x:sx, y:sy - .26, z:.1, text:'края', size:11, weight:700, color:BLUE_INK, alpha:kH });
+    D.text({ x:sx, y:sy + .66, z:.1, text:'глаз, ухо', size:11, weight:700, color:'#B4573A', alpha:seg(t, 12.8, 13.4) });
+    D.text({ x:sx, y:sy - .78, z:.1, text:'вся морда', size:11, weight:700, color:GREEN_INK, alpha:seg(t, 13.6, 14.2) });
+  } },
+
+{ title:'Аугментации', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'На train фото каждую эпоху слегка меняется: flip, random crop, поворот на 10° и color jitter дают новые варианты.', code:'T.RandomResizedCrop(224)  # + flip' },
+    { t:6.0, text:'Варианты должны быть правдоподобными: кошка, отражённая слева направо, — всё ещё кошка, а вверх лапами — уже нет.', code:'T.RandomRotation(10)  # без переворота', hold:3.8 },
+    { t:12.0, text:'Val и test — только детерминированные Resize, CenterCrop и Normalize: метрика честная и стабильная!', code:'T.Resize(256), T.CenterCrop(224)' }],
+  hud:t => t < 6.0 ? [['train', 'случайные аугм.']] : t < 12.0 ? [['flip ↔', '✓'], ['вверх лапами', '✗']] : [['val / test', 'Resize · Crop', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kB = seg(t, 6.0, 6.8), kV = seg(t, 12.0, 12.8), step = wd ? 1.45 : 1.30, s = .62, iy = 3.05;
+    const ph = Math.sin(t * 1.4), tints = ['#3B6FD4', '#25804D', '#B4573A'], ti = Math.floor(t / 1.6) % 3;
+    D.text({ x:0, y:3.62, z:.1, text:'train: новое каждую эпоху', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const v = [['оригинал', {}], ['flip ↔', { flip:true }], ['crop', { zoom:1.35 }], [wd ? 'поворот 10°' : 'поворот', { rot:10 * ph }], [wd ? 'color jitter' : 'jitter', { tint:tints[ti], sun:[0xF4A766, 0xF6C9C9, 0xFBD9B5][ti] }]];
+    v.forEach(([lab, o], i) => {
+      const x = (i - 2) * step, p = i === 0 ? a0 : seg(t, .8 + i * .9, 1.4 + i * .9);
+      dl5Photo(D, x, iy, s, { ...o, a:p });
+      D.text({ x, y:2.52, z:.1, text:lab, size:11, weight:700, color:i === 0 ? C.ink : BLUE_INK, alpha:p });
+    });
+    mtChip(D, 0, 2.14, 'вверх лапами — не кошка ✗', seg(t, 7.6, 8.2) * (1 - kV), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    D.text({ x:0, y:2.14, z:.1, text:'val / test: всегда одинаково', size:11.5, weight:700, color:C.ink, alpha:kV });
+    const bx = step * 1.6, bw = wd ? 1.75 : 1.60;
+    [[wd ? 'Resize(256)' : 'Resize', 0xC9D6F7], [wd ? 'CenterCrop(224)' : 'CenterCrop', 0xFBD9B5], ['Normalize', 0xC9EBD5]].forEach(([s2, col], i) => {
+      const p = clamp01(seg(t, 12.4 + i * .6, 13.0 + i * .6, backOut)); if (p <= .003) return;
+      const x = (i - 1) * bx;
+      D.box({ x, y:1.62, z:0, w:bw * p, h:.38 * p, d:.1, round:.3, shadow:false, color:col });
+      D.text({ x, y:1.62, z:.12, text:s2, size:11, mono:true, weight:700, color:C.ink, alpha:p });
+      if (i > 0) D.arrow({ a:[x - bx + bw / 2 + .02, 1.62, .08], b:[x - bw / 2 - .02, 1.62, .08], color:'#D97B29', alpha:p });
+    });
+    mtChip(D, 0, 1.18, 'без случайности ✓', seg(t, 14.6, 15.2), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Transfer Learning', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Берём ResNet-18, обученный на ImageNet: замораживаем backbone и меняем fc на Linear(512, 2) — учим лишь 1 026 весов.', code:'model.fc = nn.Linear(512, 2)' },
+    { t:6.0, text:'Когда голова обучена, размораживаем layer4 и делаем fine-tuning с меньшим lr: 1e-4 для слоя против 1e-3 у головы.', code:'model.layer4.requires_grad_(True)', hold:3.8 },
+    { t:12.0, text:'На маленьком датасете предобученный backbone обычно обгоняет CNN с нуля: края и формы уже выучены на ImageNet!', code:'# с нуля < голова < fine-tune' }],
+  hud:t => t < 6.0 ? [['backbone', 'заморожен'], ['fc', '1 026', 'f']] : t < 12.0 ? [['layer4', 'lr 1e-4', 'i'], ['fc', 'lr 1e-3']] : [['с нуля', '≈ 0,75'], ['fine-tune', '≈ 0,96', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kFT = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8);
+    const bx = wd ? -2.45 : -2.35, bw = wd ? 2.60 : 2.40, ys = [3.24, 2.76, 2.28, 1.80, 1.32];
+    D.text({ x:bx, y:3.62, z:.1, text:'ResNet-18 (ImageNet)', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const blk = [['layer1 · frozen', 0xDCE3F0], ['layer2 · frozen', 0xDCE3F0], ['layer3 · frozen', 0xDCE3F0],
+      [kFT > .5 ? 'layer4 · 1e-4' : 'layer4 · frozen', kFT > .5 ? 0xFBD9B5 : 0xDCE3F0], ['fc 512→2 · 1e-3', 0xC9EBD5]];
+    blk.forEach(([s, col], i) => {
+      const p = i < 4 ? clamp01(seg(t, .4 + i * .4, .9 + i * .4, backOut)) : clamp01(seg(t, 2.6, 3.2, backOut)); if (p <= .003) return;
+      D.box({ x:bx, y:ys[i], z:0, w:bw * p, h:.36 * p, d:.1, round:.3, shadow:false, color:col });
+      D.text({ x:bx, y:ys[i], z:.12, text:s, size:11, mono:true, weight:700, color:C.ink, alpha:p });
+    });
+    dl5Rect(D, bx, ys[4], bw + .12, .5, { color:'#25804D', lw:.03, a:seg(t, 3.2, 3.8) * (1 - kFT) });
+    dl5Rect(D, bx, ys[3], bw + .12, .5, { color:'#D97B29', lw:.03, a:kFT * (1 - kS) });
+    const R = mAx(wd ? .88 : 1.18, 1.48, wd ? 3.25 : 2.92, 1.92, [.4, 3.6], [.5, 1.06]), names = ['с нуля', 'голова', wd ? 'fine-tune' : 'тюнинг'];
+    mFrame(D, R, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 2, 3], xtl:(v, i) => names[i], yt:[.5, .75, 1.0], ytl:v => String(v).replace('.', ','), grid:.4,
+      ylabel:'val accuracy', ylA:a0, ylOff:wd ? .72 : .92 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'Cats vs Dogs (иллюстрация)', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    [[2, .93, 3.6, 2], [3, .96, 8.6, 1], [1, .75, 12.4, 3]].forEach(([x, acc, t0, c]) => {
+      const k = seg(t, t0, t0 + 1.0); if (k < .01) return;
+      mBar(D, R, x, acc - .5, { base:.5, k, w:.5, c });
+      D.text({ x:R.X(x), y:R.Y(.5 + (acc - .5) * k) + .16, z:.1, text:String(acc).replace('.', ','), size:11, weight:700, color:C.ink, alpha:k });
+    });
+  } }
+];
+
+const DL5_META = [
+  { intro:'Почему для картинок MLP неудобен, а CNN экономна.',
+    key:'MLP даёт каждому пикселю свой вес — миллионы параметров; CNN двигает 1 маленький фильтр по всему фото: общие веса и локальность.',
+    keySay:'Главное. Полносвязная сеть даёт каждому пикселю собственные веса и раздувается до миллионов параметров, а си-эн-эн прикладывает один маленький фильтр ко всему изображению — общие веса и локальность.',
+    says:['Возьмём задачу кэтс вэрсус догс: отличить кошку от собаки на фото. Картинка двести двадцать четыре на двести двадцать четыре в трёх каналах — это сто пятьдесят тысяч чисел. Эм-эл-пи видит их как независимые признаки, и один слой на пятьсот двенадцать нейронов уже требует около семидесяти семи миллионов весов.',
+          'Свёрточная сеть, си-эн-эн, поступает иначе. Она берёт маленький фильтр три на три, его называют кёрнел, и прикладывает его к каждому участку фото по очереди. На каждом шаге работают одни и те же двадцать семь весов.',
+          'Это две ключевые идеи. Общие веса: тридцать два фильтра стоят меньше девятисот параметров. И локальность: фильтр смотрит на соседние пиксели, поэтому кошачье ухо узнаётся в любом месте кадра, а не только там, где оно было на обучающих фото.'],
+    terms:[['MLP', 'вес на каждый пиксель'], ['Conv2d', 'общий фильтр по всему фото'], ['локальность', 'соседние пиксели вместе']] },
+  { intro:'Как ядро 3×3 превращает картинку в feature map.',
+    key:'Ядро скользит по изображению, в каждом окне считает скалярное произведение; каждый фильтр — свой признак и 1 выходной канал.',
+    keySay:'Главное. Кёрнел скользит по изображению и в каждом окне считает скалярное произведение, так получается фича-мэп; каждый фильтр ловит свой признак и даёт один выходной канал.',
+    says:['Посмотрим на свёртку вблизи. Слева картинка пять на пять, где тёмная половина переходит в светлую. Кёрнел три на три скользит по ней: в каждом окне перемножаем девять пар чисел и складываем. Одно окно — одна клетка результата, это и есть фича-мэп.',
+          'Этот фильтр с весами минус один, ноль, один реагирует на вертикальный край: там, где яркость меняется, ответ большой, а на ровном месте — ноль. Веса фильтров не задают вручную: сеть сама учит один фильтр на вертикальные края, другой на горизонтальные, третий на шерсть и текстуры.',
+          'Теперь каналы. Цветное фото — это три канала, красный, зелёный и синий, поэтому фильтр на самом деле три на три на три и видит все цвета сразу. Каждый фильтр даёт один выходной канал: тридцать два фильтра — тридцать две фича-мэп.'],
+    terms:[['kernel 3×3', 'обучаемые веса фильтра'], ['feature map', 'карта ответов фильтра'], ['C_in → C_out', '3 RGB → 32 фильтра']] },
+  { intro:'Stride, padding и pooling управляют размером карт.',
+    key:'Размер выхода = (H + 2P − K) / S + 1; padding сохраняет сторону, stride и MaxPool 2×2 делят её пополам, каналы растут.',
+    keySay:'Главное. Размер выхода считается по одной формуле: пэддинг сохраняет сторону, а страйд и пулинг уменьшают её вдвое, пока число каналов растёт.',
+    says:['У свёртки три настройки размера. Кёрнел — размер ядра, страйд — шаг, с которым оно сдвигается, и пэддинг — рамка из нулей по краю. Выход считается по формуле: аш плюс два пэ минус ка, делённое на эс, плюс один. При ядре три, пэддинге один и шаге один сторона сто двадцать восемь сохраняется.',
+          'Чтобы уменьшить карту, берут страйд два или макс-пулинг два на два. Пулинг делит карту на квадраты два на два и оставляет из каждого только максимум. Сторона падает вдвое, со ста двадцати восьми до шестидесяти четырёх, а самые сильные ответы фильтров сохраняются.',
+          'Так собирают типичную си-эн-эн: блок свёртка плюс пулинг удваивает число каналов и делит сторону пополам. Три на сто двадцать восемь на сто двадцать восемь превращается в тридцать два на шестьдесят четыре, затем шестьдесят четыре на тридцать два и сто двадцать восемь на шестнадцать.'],
+    terms:[['padding = 1', 'сторона сохраняется'], ['stride / MaxPool 2', 'сторона ÷ 2'], ['shape [C, H, W]', 'каналы ↑, сторона ↓']] },
+  { intro:'Receptive field — сколько пикселей видит одна активация.',
+    key:'Каждый conv 3×3 расширяет receptive field на 2, pooling удваивает прирост: глубокие слои видят части и целые объекты.',
+    keySay:'Главное. Рецептив филд растёт с глубиной: каждая свёртка добавляет немного, пулинг ускоряет рост, поэтому ранние слои видят края, а глубокие — целые объекты.',
+    says:['Рецептив филд — это область исходного фото, от которой зависит одна активация. Нейрон первого слоя видит только окно три на три. Нейрон второго слоя смотрит на три на три активации первого, а они вместе покрывают пять на пять пикселей. Третий слой — уже семь на семь.',
+          'Без пулинга рост медленный, плюс два пикселя за слой. Но пулинг удваивает шаг сетки, и каждая следующая свёртка захватывает вдвое шире: три, восемь, восемнадцать, тридцать восемь пикселей. Поэтому несколько блоков свёртка плюс пулинг быстро охватывают большую часть кадра.',
+          'Отсюда иерархия признаков. Ранние слои с маленьким рецептив филд ловят края и пятна, средние собирают из них глаз, ухо или нос, а глубокие видят всю морду и отличают кошку от собаки.'],
+    terms:[['receptive field', 'область фото для 1 активации'], ['conv 3×3', 'RF + 2'], ['иерархия', 'края → части → объект']] },
+  { intro:'Аугментации расширяют train, val и test неизменны.',
+    key:'На train — случайные правдоподобные flip, crop, поворот и jitter; на val/test — только Resize, CenterCrop и Normalize.',
+    keySay:'Главное. Аугментации применяют только к обучающей выборке и только правдоподобные, а валидацию и тест обрабатывают детерминированно, чтобы метрика была честной.',
+    says:['Фотографий кошек и собак у нас немного, и сеть может выучить их наизусть. Аугментации каждую эпоху показывают ей слегка другое фото: отражение слева направо, случайный кроп, поворот на десять градусов и небольшое изменение цвета, колор джиттер.',
+          'Главное правило — правдоподобие. Отражённая кошка остаётся кошкой, слегка повёрнутая тоже. А кошка вверх лапами в реальных фото почти не встречается, и такая аугментация только запутает сеть.',
+          'На валидации и тесте аугментаций нет. Там только детерминированные шаги: ресайз, центр-кроп и нормализация. Тогда одно и то же фото всегда даёт один и тот же вход, и метрика честная и сравнимая между запусками.'],
+    terms:[['train-аугментации', 'flip, crop, rotate, jitter'], ['правдоподобие', 'без переворота вверх лапами'], ['val/test', 'Resize · CenterCrop · Normalize']] },
+  { intro:'Transfer learning: готовый backbone и новая голова.',
+    key:'Заморозь backbone ResNet-18, обучи новую fc (512 → 2), затем разморозь layer4 и дообучи с lr в 10 раз меньше.',
+    keySay:'Главное. Трансфер лёрнинг берёт бэкбон, обученный на миллионе фото, сначала учит только новую голову, а затем аккуратно делает файн-тюнинг верхнего слоя с маленьким шагом.',
+    says:['Учить сеть с нуля на паре тысяч фото тяжело. Вместо этого берут рез-нет восемнадцать, уже обученный на ИмэджНет — миллионе фото тысячи классов. Его бэкбон замораживаем, а последний слой эф-си меняем на линейный слой пятьсот двенадцать на два. Учатся всего тысяча двадцать шесть весов.',
+          'Когда новая голова обучена, делаем файн-тюнинг: размораживаем последний блок, лэйер четыре, и дообучаем его с маленьким шагом, одна десятитысячная против одной тысячной у головы. Маленький шаг не даёт разрушить полезные признаки ИмэджНет.',
+          'Подведём итог. Свёртки с общими весами, пулинг и растущий рецептив филд дают иерархию признаков, аугментации расширяют трейн, а трансфер лёрнинг переносит готовые признаки. На маленьком датасете предобученный бэкбон обычно заметно лучше сети с нуля.'],
+    terms:[['freeze backbone', 'requires_grad = False'], ['fc → Linear(512, 2)', '1 026 обучаемых весов'], ['fine-tuning', 'layer4, lr 1e-4']] }
+];
+
+const DL5_CHEAT = `<span class="kw">import</span> torch, torch.nn <span class="kw">as</span> nn
+<span class="kw">from</span> torchvision <span class="kw">import</span> models, transforms <span class="kw">as</span> T
+
+<span class="c"># 1. Аугментации только для train; val/test детерминированные</span>
+norm = T.<span class="fn">Normalize</span>([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+train_tf = T.<span class="fn">Compose</span>([T.<span class="fn">RandomResizedCrop</span>(224), T.<span class="fn">RandomHorizontalFlip</span>(), T.<span class="fn">RandomRotation</span>(10),
+                      T.<span class="fn">ColorJitter</span>(0.2, 0.2), T.<span class="fn">ToTensor</span>(), norm])
+val_tf = T.<span class="fn">Compose</span>([T.<span class="fn">Resize</span>(256), T.<span class="fn">CenterCrop</span>(224), T.<span class="fn">ToTensor</span>(), norm])
+
+<span class="c"># 2. Блок CNN: (H + 2P − K) / S + 1 → padding=1 сохраняет сторону, MaxPool делит на 2</span>
+block = nn.<span class="fn">Sequential</span>(nn.<span class="fn">Conv2d</span>(3, 32, 3, padding=1), nn.<span class="fn">ReLU</span>(), nn.<span class="fn">MaxPool2d</span>(2))  <span class="c"># [3,128,128] → [32,64,64]</span>
+
+<span class="c"># 3. Transfer learning: заморозить backbone, заменить голову</span>
+model = models.<span class="fn">resnet18</span>(weights=models.ResNet18_Weights.DEFAULT)
+<span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>(): p.requires_grad = <span class="kw">False</span>
+model.fc = nn.<span class="fn">Linear</span>(512, 2)                            <span class="c"># 512·2 + 2 = 1 026 параметров</span>
+
+<span class="c"># 4. Fine-tuning: разморозить layer4, lr меньше, чем у головы</span>
+model.layer4.<span class="fn">requires_grad_</span>(<span class="kw">True</span>)
+opt = torch.optim.<span class="fn">AdamW</span>([{'params': model.layer4.<span class="fn">parameters</span>(), 'lr': 1e-4},
+                         {'params': model.fc.<span class="fn">parameters</span>(), 'lr': 1e-3}])`;
+
+applyMeta(DL5_SCENES, DL5_META);
+DL_LESSONS.push({ short:'CNN и Transfer', title:'CNN и Transfer Learning',
+  intro:{ eyebrow:'Тема 05 · Deep Learning', title:'Свёртки, receptive field и готовый ResNet',
+          text:'Почему для фото MLP неэкономен, как ядро 3×3 строит feature map, что делают stride, padding и pooling, как растёт receptive field, зачем аугментации только на train и как дообучить ResNet-18 на Cats vs Dogs.',
+          meta:'6 сцен · около 4 минут в спокойном темпе' },
+  end:{ title:'Свёртки и перенос знаний', text:'CNN двигает общие фильтры по фото, pooling сжимает карты, а receptive field растёт от краёв к целым объектам. Аугментации расширяют только train, а предобученный ResNet с новой головой и fine-tuning на малых данных обычно лучше сети с нуля.',
+        rule:'Мало данных — бери предобученный backbone: сначала голова, потом fine-tuning.' },
+  legend:[['#86A8F0', 'вход · frozen'], ['#F4A766', 'фильтр · fine-tune'], ['#3A9E4F', 'feature map · голова'], ['#D9534A', 'MLP · ошибка']],
+  cheat:DL5_CHEAT,
+  scenes:DL5_SCENES });
+
 const DL_UPCOMING = [];
 
 const UPCOMING = [];
