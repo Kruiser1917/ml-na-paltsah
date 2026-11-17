@@ -15884,11 +15884,351 @@ DL_LESSONS.push({ short:'CNN и Transfer', title:'CNN и Transfer Learning',
   intro:{ eyebrow:'Тема 05 · Deep Learning', title:'Свёртки, receptive field и готовый ResNet',
           text:'Почему для фото MLP неэкономен, как ядро 3×3 строит feature map, что делают stride, padding и pooling, как растёт receptive field, зачем аугментации только на train и как дообучить ResNet-18 на Cats vs Dogs.',
           meta:'6 сцен · около 4 минут в спокойном темпе' },
-  end:{ title:'Свёртки и перенос знаний', text:'CNN двигает общие фильтры по фото, pooling сжимает карты, а receptive field растёт от краёв к целым объектам. Аугментации расширяют только train, а предобученный ResNet с новой головой и fine-tuning на малых данных обычно лучше сети с нуля.',
+  end:{ title:'Свёртки и перенос знаний', text:'CNN двигает общие фильтры по фото, pooling сжимает карты, а receptive field растёт от краёв к целым объектам. Аугментации — только для train, а предобученный ResNet с fine-tuning на малых данных лучше сети с нуля.',
         rule:'Мало данных — бери предобученный backbone: сначала голова, потом fine-tuning.' },
   legend:[['#86A8F0', 'вход · frozen'], ['#F4A766', 'фильтр · fine-tune'], ['#3A9E4F', 'feature map · голова'], ['#D9534A', 'MLP · ошибка']],
   cheat:DL5_CHEAT,
   scenes:DL5_SCENES });
+
+/* =========================================================================
+   DL — Lesson 6: RNN, LSTM & GRU (IMDB sentiment, illustrative numbers)
+   ========================================================================= */
+const DL6_SCENES = [
+{ title:'Порядок слов и RNN', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Порядок слов важен: в «фильм не плохой» и «фильм плохой, не смотрите» похожие слова, а тональность противоположная.', code:'"не плохой" != "плохой, не…"' },
+    { t:6.0, text:'RNN читает токены по одному и на каждом шаге обновляет hidden state h_t — сжатую память о прочитанном.', code:'h_t = tanh(W·x_t + U·h_{t-1} + b)', hold:3.8 },
+    { t:12.0, text:'Развёртка по времени: одна ячейка с общими весами W, U и b повторяется T раз, а последний h_T идёт в классификатор.', code:'logits = fc(h_T)  # pos / neg' }],
+  hud:t => t < 6.0 ? [['задача', 'pos / neg']] : t < 12.0 ? [['шаг', 'токен → h_t', 'i']] : [['веса', 'общие'], ['выход', 'fc(h_T)', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), s = wd ? 1 : .92, a0 = seg(t, .2, .9), kC = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8), p0 = a0 * (1 - kC);
+    // фаза 0: два отзыва с похожими словами
+    D.text({ x:0, y:3.62, z:.1, text:'Похожие слова — другой порядок', size:11.5, weight:700, color:C.ink, alpha:p0 });
+    [['фильм', 'не', 'плохой'], ['фильм', 'плохой,', 'не', 'смотрите']].forEach((r, i) => {
+      const y = i ? 2.40 : 3.05, t0 = .6 + i * 1.8;
+      r.forEach((w, j) => mtChip(D, -2.9 + j * 1.2, y, w, seg(t, t0 + j * .3, t0 + .5 + j * .3) * (1 - kC), { mono:false, size:11.5, bg:TAG }));
+      const ka = seg(t, t0 + 1.2, t0 + 1.7) * (1 - kC);
+      D.arrow({ a:[-2.9 + r.length * 1.2 - .6, y, .08], b:[1.85, y, .08], color:'#7D869B', alpha:ka });
+      mtChip(D, 2.65, y, i ? 'негатив' : 'позитив', ka, { mono:false, size:11.5, color:i ? '#B4573A' : GREEN_INK, bg:i ? PILL_BAD : PILL_OK });
+    });
+    D.text({ x:0, y:1.60, z:.1, text:'«не плохой» ≠ «плохой, не…»', size:12, weight:700, color:'#B4573A', alpha:seg(t, 4.4, 5.0) * (1 - kC) });
+    if (kC < .01) return;
+    // фаза 1–2: развёртка RNN по времени
+    const xs = [-2.4, -.8, .8, 2.4].map(v => v * s), toks = ['фильм', 'совсем', 'не', 'плохой'], cy = 2.40;
+    const act = t < 12.0 ? clamp(Math.floor((t - 6.6) / 1.2), -1, 3) : 3;
+    toks.forEach((w, j) => {
+      const on = j <= act, cur = j === act && t < 12.0;
+      D.box({ x:xs[j], y:cy, z:0, w:.95, h:.62, d:.1, round:.3, shadow:false, color:cur ? 0xFBD9B5 : on ? 0xC9D6F7 : 0xE9ECF2, alpha:kC });
+      D.text({ x:xs[j], y:cy, z:.12, text:'h' + (j + 1), size:12, mono:true, weight:700, color:C.ink, alpha:kC });
+      mtChip(D, xs[j], 1.38, w, kC, { mono:false, size:11, bg:TAG });
+      D.arrow({ a:[xs[j], 1.58, .08], b:[xs[j], cy - .36, .08], color:'#7D869B', alpha:kC * (on ? 1 : .35) });
+      if (j < 3) D.arrow({ a:[xs[j] + .5, cy, .08], b:[xs[j + 1] - .5, cy, .08], color:'#D97B29', alpha:kC * (j < act ? 1 : .25) });
+      dl5Rect(D, xs[j], cy, 1.1, .78, { color:'#25804D', lw:.026, dash:[6, 4], a:kS });
+    });
+    D.text({ x:0, y:3.62, z:.1, text:'RNN читает слева направо', size:11.5, weight:700, color:C.ink, alpha:kC * (1 - kS) });
+    mtChip(D, 0, 3.10, 'h_t = tanh(W·x_t + U·h_{t-1} + b)', seg(t, 7.0, 7.6) * (1 - kS), { size:11, bg:PILL_HOT });
+    D.text({ x:0, y:3.62, z:.1, text:'1 ячейка × T шагов', size:11.5, weight:700, color:GREEN_INK, alpha:kS });
+    mtChip(D, xs[0] + .55, 3.10, 'W, U, b — общие', seg(t, 12.4, 13.0), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    const kO = seg(t, 13.6, 14.2);
+    D.arrow({ a:[xs[3], cy + .36, .08], b:[xs[3], 2.86, .08], color:'#25804D', alpha:kO });
+    mtChip(D, xs[3] - .35, 3.12, 'fc(h4) → позитив', kO, { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Токены и Embedding', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Текст режем на токены и заменяем индексами словаря: словарь строим только по train, <pad> = 0, <unk> = 1.', code:'vocab = {"<pad>": 0, "<unk>": 1, …}' },
+    { t:6.0, text:'nn.Embedding — таблица V × d: индекс токена выбирает строку, плотный вектор из d чисел, который учится вместе с сетью.', code:'emb = nn.Embedding(len(vocab), 100)', hold:3.8 },
+    { t:12.0, text:'В начале векторы случайны, а в процессе обучения слова похожей тональности, «отличный» и «шикарный», сближаются.', code:'# cos(e_отличный, e_шикарный) растёт' }],
+  hud:t => t < 6.0 ? [['словарь', 'по train'], ['OOV', '<unk> = 1']] : t < 12.0 ? [['таблица', 'V × d', 'i']] : [['сходство', 'после обучения', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), s = wd ? 1 : .92, a0 = seg(t, .2, .9), kE = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8), p0 = a0 * (1 - kE);
+    // фаза 0: текст → токены → индексы
+    D.text({ x:0, y:3.62, z:.1, text:'Текст → токены → индексы', size:11.5, weight:700, color:C.ink, alpha:p0 });
+    [['отличный', '57'], ['фильм', '12'], ['шикарный', '803'], ['каст', '1 · <unk>']].forEach(([w, id], j) => {
+      const x = (-2.55 + j * 1.7) * s, k1 = seg(t, .6 + j * .4, 1.1 + j * .4) * (1 - kE), k2 = seg(t, 2.2 + j * .4, 2.7 + j * .4) * (1 - kE);
+      mtChip(D, x, 3.05, w, k1, { mono:false, size:11.5, bg:TAG });
+      D.arrow({ a:[x, 2.85, .08], b:[x, 2.42, .08], color:'#7D869B', alpha:k2 });
+      mtChip(D, x, 2.22, id, k2, { size:11, color:j === 3 ? '#B4573A' : C.ink, bg:j === 3 ? PILL_BAD : PILL_HOT });
+    });
+    [['словарь — только по train', -2.0, BLUE_INK, TAG], ['<pad> = 0', .55, C.ink, TAG], ['<unk> = 1', 2.25, '#B4573A', PILL_BAD]].forEach(([s2, x, col, bg], i) =>
+      mtChip(D, x * s, 1.45, s2, seg(t, 4.2 + i * .5, 4.8 + i * .5) * (1 - kE), { mono:i > 0, size:11, color:col, bg }));
+    if (kE < .01) return;
+    // фаза 1: таблица Embedding V × d
+    const lx = wd ? -2.05 : -1.95, rows = [['0 <pad>', 0xE9ECF2], ['1 <unk>', 0xE9ECF2], ['12', 0xC9D6F7], ['57', 0xFBD9B5], ['803', 0xC9D6F7]], ry = [3.20, 2.80, 2.40, 2.00, 1.60];
+    D.text({ x:lx, y:3.62, z:.1, text:'Embedding: V × d', size:11.5, weight:700, color:C.ink, alpha:kE });
+    rows.forEach(([lb, col], i) => {
+      const hot = i === 3;
+      D.text({ x:lx - .78, y:ry[i], z:.1, text:lb, size:11, mono:true, weight:700, color:hot ? '#B4573A' : M_INK, alpha:kE, align:'right' });
+      for (let j = 0; j < 4; j++) D.box({ x:lx - .45 + j * .34 + .17, y:ry[i], z:0, w:.29, h:.29, d:.06, round:.25, shadow:false, color:hot ? col : (i < 2 ? 0xE9ECF2 : 0xC9D6F7), alpha:kE });
+    });
+    D.text({ x:lx, y:1.22, z:.1, text:'веса учатся backprop', size:11, weight:700, color:BLUE_INK, alpha:seg(t, 9.0, 9.6) });
+    const kV = seg(t, 7.2, 7.9) * (1 - kS), vx = wd ? 1.30 : 1.35, vals = ['0,2', '−0,8', '0,1', '1,3'];
+    D.arrow({ a:[lx + .95, 2.00, .08], b:[vx - 1.05, 2.40, .08], color:'#D97B29', alpha:kV });
+    D.text({ x:vx + .3, y:3.05, z:.1, text:'вектор токена 57', size:11.5, weight:700, color:C.ink, alpha:kV });
+    vals.forEach((v, j) => {
+      const x = vx - .6 + j * .6;
+      D.box({ x, y:2.40, z:0, w:.54, h:.40, d:.08, round:.25, shadow:false, color:0xFBD9B5, alpha:kV });
+      D.text({ x, y:2.40, z:.12, text:v, size:11, mono:true, weight:700, color:C.ink, alpha:kV });
+    });
+    mtChip(D, vx + .3, 1.70, 'плотный, d = 100', seg(t, 8.4, 9.0) * (1 - kS), { mono:false, size:11, bg:TAG });
+    // фаза 2: векторы сближаются по смыслу
+    if (kS < .01) return;
+    const R = mAx(wd ? .65 : .75, 1.48, wd ? 3.0 : 2.75, 1.92, [-1.5, 1.5], [-1, 1]), k = seg(t, 12.8, 16.0);
+    mFrame(D, R, { sp:kS, spines:{ l:1, b:1 }, ticks:0 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'2D-проекция векторов', size:11.5, weight:700, color:C.ink, alpha:kS });
+    [['отличный', [-.9, -.6], [.3, .62], 2], ['шикарный', [.8, -.4], [1.05, .1], 2], ['скучный', [.3, .6], [-.8, -.2], 3], ['ужасный', [-.6, .5], [-.3, -.72], 3], ['фильм', [.9, .65], [-.4, .3], 0]].forEach(([w, p, q, c]) => {
+      const x = lerp(p[0], q[0], k), y = lerp(p[1], q[1], k);
+      mDot(D, R, x, y, { c, a:kS, r:.07 });
+      D.text({ x:R.X(x), y:R.Y(y) + .2, z:.1, text:w, size:11, weight:700, color:c === 2 ? GREEN_INK : c === 3 ? '#B4573A' : M_INK, alpha:kS });
+    });
+  } },
+
+{ title:'Padding и маски', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Отзывы разной длины: в батче короткие дополняем <pad> до самого длинного и отдельно храним реальные длины lengths.', code:'pad_sequence(seqs, batch_first=True)' },
+    { t:6.0, text:'padding_idx лишь не обновляет вектор PAD, но RNN всё равно его читает: на хвосте из PAD состояние размывается.', code:'nn.Embedding(V, d, padding_idx=0)', hold:3.8 },
+    { t:12.0, text:'Берём последнее реальное состояние по lengths или маске, либо пакуем батч: pack_padded_sequence пропускает PAD.', code:'pack_padded_sequence(x, lengths, …)' }],
+  hud:t => t < 6.0 ? [['lengths', '[8, 5, 3]']] : t < 12.0 ? [['h на PAD', 'размыт', 'i']] : [['берём', 'h[len − 1]', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kP = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8);
+    const mx = wd ? -2.0 : -1.95, cs = .30, L = [8, 5, 3], ys = [3.10, 2.72, 2.34];
+    D.text({ x:mx, y:3.62, z:.1, text:'Батч после padding', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    ys.forEach((y, i) => {
+      const p = seg(t, .5 + i * .6, 1.1 + i * .6);
+      for (let j = 0; j < 8; j++){
+        const real = j < L[i], x = mx + (j - 3.5) * cs;
+        D.box({ x, y, z:0, w:cs * .86, h:cs * .86, d:.06, round:.25, shadow:false, color:real ? (kS > .5 ? 0xC9EBD5 : 0xC9D6F7) : 0xE9ECF2, alpha:p });
+        if (!real || kS > .5) D.text({ x, y, z:.08, text:real ? '1' : '0', size:11, mono:true, weight:700, color:real ? GREEN_INK : M_INK, alpha:p });
+      }
+    });
+    dl5Rect(D, mx, ys[2], 8 * cs + .1, cs + .12, { color:'#D97B29', lw:.03, a:kP });
+    D.text({ x:mx, y:1.92, z:.1, text:'lengths = [8, 5, 3]', size:11.5, mono:true, weight:700, color:BLUE_INK, alpha:seg(t, 2.6, 3.2) });
+    mtChip(D, mx, 1.42, 'PAD-вектор не учится', kP * (1 - kS), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    mtChip(D, mx, 1.42, 'mask = (x != 0)', kS, { size:11, color:GREEN_INK, bg:PILL_OK });
+    mtChip(D, mx, 1.42, '0 = <pad>', seg(t, 3.6, 4.2) * (1 - kP), { size:11, bg:TAG });
+    if (kP < .01) return;
+    // уверенность модели по шагам для отзыва длины 3
+    const R = mAx(wd ? .70 : .85, 1.48, wd ? 2.95 : 2.75, 1.92, [.5, 8.5], [.3, 1]), v = [.62, .71, .86, .79, .72, .66, .61, .57];
+    mFrame(D, R, { sp:kP, spines:{ l:1, b:1 }, ticks:kP, xt:[1, 3, 5, 8], yt:[.5, 1], ytl:x => String(x).replace('.', ','), grid:.4 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'отзыв длины 3: p(позитив)', size:11.5, weight:700, color:C.ink, alpha:kP });
+    D.line({ a:[R.X(3.5), R.y0, .02], b:[R.X(3.5), R.y1, .02], color:'#7D869B', width:.02, dash:[6, 4], alpha:kP, layer:56 });
+    D.text({ x:R.X(6), y:R.y1 - .2, z:.1, text:'PAD →', size:11, weight:700, color:M_INK, alpha:kP });
+    mLine(D, R, [1, 2, 3], v.slice(0, 3), { c:2, k:seg(t, 6.6, 7.8), marker:'o', a:kP });
+    mLine(D, R, [3, 4, 5, 6, 7, 8], v.slice(2), { c:3, k:seg(t, 8.0, 10.6), dash:'--', a:kP });
+    const kM = seg(t, 12.6, 13.2);
+    mDot(D, R, 3, v[2], { c:2, r:.11, a:kM });
+    mtChip(D, R.X(3), R.Y(v[2]) + .28, '0,86 ✓', kM, { size:11, color:GREEN_INK, bg:PILL_OK });
+    mDot(D, R, 8, v[7], { c:3, r:.11, a:seg(t, 13.4, 14.0) });
+    mtChip(D, R.X(8) - .1, R.Y(v[7]) - .32, '0,57 ✗', seg(t, 13.4, 14.0), { size:11, color:'#B4573A', bg:PILL_BAD });
+  } },
+
+{ title:'BPTT и clipping', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'BPTT: граф развёрнут на T шагов, и градиент к первым токенам проходит через T множителей ∂h_t / ∂h_{t−1}.', code:'loss.backward()  # через все T шагов' },
+    { t:6.0, text:'Множители меньше 1 гасят градиент, больше 1 раздувают его: на отзыве в 200 токенов 0,9²⁰⁰ ≈ 7·10⁻¹⁰, а 1,1²⁰⁰ ≈ 2·10⁸.', code:'# 0.9 ** 200 ≈ 7e-10, 1.1 ** 200 ≈ 2e8', hold:3.8 },
+    { t:12.0, text:'clip_grad_norm_ обрезает норму градиента до порога перед шагом: всплески не ломают обучение, направление сохраняется.', code:'clip_grad_norm_(model.parameters(), 1.0)' }],
+  hud:t => t < 6.0 ? [['граф', 'T шагов']] : t < 12.0 ? [['× 0,9', 'затухание', 'i'], ['× 1,1', 'взрыв']] : [['‖g‖', '≤ 1,0', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kV = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8);
+    const lc = wd ? -2.15 : -2.05, cy = 3.00;
+    D.text({ x:lc, y:3.62, z:.1, text:'BPTT: T шагов назад', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    for (let j = 0; j < 5; j++){
+      const x = lc + (j - 2) * .72, p = seg(t, .5 + j * .25, 1.0 + j * .25);
+      D.box({ x, y:cy, z:0, w:.52, h:.44, d:.08, round:.3, shadow:false, color:0xC9D6F7, alpha:p });
+      D.text({ x, y:cy, z:.1, text:j === 4 ? 'hT' : 'h' + (j + 1), size:11, mono:true, weight:700, color:C.ink, alpha:p });
+    }
+    const kB = seg(t, 2.0, 4.0);
+    D.arrow({ a:[lc + 1.6, 2.55, .08], b:[lc + 1.6 - 3.2 * kB, 2.55, .08], color:'#D97B29', alpha:seg(t, 2.0, 2.3) });
+    D.text({ x:lc, y:2.30, z:.1, text:'∂L/∂h1 = ∏ ∂h_t/∂h_{t−1}', size:11, mono:true, weight:700, color:'#B4573A', alpha:seg(t, 3.6, 4.2) });
+    D.text({ x:lc, y:1.80, z:.1, text:'× 0,9 → затухание', size:11.5, weight:700, color:BLUE_INK, alpha:seg(t, 7.0, 7.6) * (1 - kS) });
+    D.text({ x:lc, y:1.40, z:.1, text:'× 1,1 → взрыв', size:11.5, weight:700, color:'#B4573A', alpha:seg(t, 8.4, 9.0) * (1 - kS) });
+    mtChip(D, lc, 1.80, 'всплеск 5,6 → 1,0', seg(t, 13.4, 14.0), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    mtChip(D, lc, 1.36, 'направление то же ✓', seg(t, 14.4, 15.0), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    const x0 = wd ? .80 : .95, w = wd ? 2.95 : 2.75;
+    // график 1: градиент через k шагов (лог-шкала)
+    const pA = a0 * (1 - kS), RA = mAx(x0, 1.48, w, 1.92, [0, 60], [-3, 3]);
+    mFrame(D, RA, { a:pA, spines:{ l:1, b:1 }, xt:[0, 30, 60], yt:[-3, 0, 3], ytl:v => v ? (v > 0 ? '10³' : '10⁻³') : '1', grid:.4 });
+    D.text({ x:RA.cx, y:RA.y1 + .24, z:.1, text:'‖grad‖ через k шагов', size:11.5, weight:700, color:C.ink, alpha:pA });
+    const ks = Array.from({ length:13 }, (_, i) => i * 5);
+    mLine(D, RA, [0, 60], [0, 0], { css:'#7D869B', dash:'--', a:pA * seg(t, 1.0, 1.6), lw:.03 });
+    mLine(D, RA, ks, ks.map(k => k * Math.log10(.9)), { c:0, k:seg(t, 6.6, 8.6), a:pA });
+    mLine(D, RA, ks, ks.map(k => k * Math.log10(1.1)), { c:3, k:seg(t, 8.0, 10.0), a:pA });
+    // график 2: норма градиента до и после clip
+    if (kS < .01) return;
+    const RB = mAx(x0, 1.48, w, 1.92, [0, 30], [0, 6]), it = Array.from({ length:31 }, (_, i) => i);
+    const g = it.map(i => i === 8 ? 5.2 : i === 19 ? 4.0 : i === 25 ? 5.6 : .55 + .25 * Math.sin(i * 1.7));
+    mFrame(D, RB, { a:kS, spines:{ l:1, b:1 }, xt:[0, 15, 30], yt:[0, 1, 3, 6], ytl:v => v === 1 ? '1,0' : String(v), grid:.4 });
+    D.text({ x:RB.cx, y:RB.y1 + .24, z:.1, text:'‖grad‖ до и после clip', size:11.5, weight:700, color:C.ink, alpha:kS });
+    mLine(D, RB, it, g, { c:3, k:seg(t, 12.4, 14.0), a:kS * .55, lw:.03 });
+    mLine(D, RB, [0, 30], [1, 1], { css:'#7D869B', dash:'--', a:kS, lw:.03 });
+    mLine(D, RB, it, g.map(v => Math.min(v, 1)), { c:2, k:seg(t, 14.0, 15.6), a:kS });
+  } },
+
+{ title:'LSTM и GRU', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'LSTM добавляет ячейку памяти c_t: forget-гейт решает, что стереть, input — что записать, а output — что показать.', code:'c_t = f_t·c_{t-1} + i_t·g_t' },
+    { t:6.0, text:'По линии c_t информация идёт почти без умножений на W, поэтому градиент живёт дольше и длинный контекст не теряется.', code:'h_t = o_t · tanh(c_t)', hold:3.8 },
+    { t:12.0, text:'GRU обходится двумя гейтами update и reset без отдельной c_t: около 3/4 параметров LSTM, а лучшего выбирает опыт.', code:'nn.GRU(100, 128)  # 3 блока, LSTM — 4' }],
+  hud:t => t < 6.0 ? [['гейты', 'f · i · o']] : t < 12.0 ? [['память', 'c_t', 'i']] : [['GRU', '≈ 3/4 LSTM', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kM = seg(t, 6.0, 6.8), kG = seg(t, 12.0, 12.8);
+    const lc = wd ? -1.95 : -1.85, top = 3.02, gy = 2.20;
+    D.text({ x:lc, y:3.62, z:.1, text:'Ячейка LSTM', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    dl5Rect(D, lc, 2.20, 3.5, 2.10, { color:'#7D869B', lw:.026, a:a0 });
+    // линия памяти c_t
+    D.line({ a:[lc - 1.75, top, .04], b:[lc + 1.75, top, .04], color:'#25804D', width:.05 + .03 * kM, alpha:a0, layer:57 });
+    D.text({ x:lc - 1.35, y:3.50, z:.1, text:'c_{t−1}', size:11, mono:true, weight:700, color:GREEN_INK, alpha:a0 });
+    D.text({ x:lc + 1.45, y:3.50, z:.1, text:'c_t', size:11, mono:true, weight:700, color:GREEN_INK, alpha:a0 });
+    if (kM > .01) D.sphere({ x:lc - 1.7 + 3.4 * ((t - 6.0) / 2.4 % 1), y:top, z:.08, r:.08, color:0x3A9E4F, alpha:kM * (1 - kG * .7), shadow:false, layer:58 });
+    // гейты f, i, o
+    [['f', 0xF6C9C9, -1.0, '×'], ['i', 0xC9D6F7, 0, '+'], ['o', 0xC9EBD5, 1.0, '']].forEach(([g, col, dx, op], i) => {
+      const x = lc + dx, p = clamp01(seg(t, .6 + i * 1.4, 1.2 + i * 1.4, backOut));
+      if (p <= .003) return;
+      D.sphere({ x, y:gy, z:.04, r:.24 * p, color:col, shadow:false, layer:58 });
+      D.text({ x, y:gy, z:.3, text:g, size:12.5, mono:true, weight:800, color:C.ink, alpha:p });
+      D.arrow({ a:[x, 1.52, .08], b:[x, gy - .28, .08], color:'#7D869B', alpha:p });
+      if (op){ D.arrow({ a:[x, gy + .28, .08], b:[x, top - .14, .08], color:'#D97B29', alpha:p });
+        D.text({ x:x + .2, y:top - .24, z:.1, text:op, size:12.5, weight:800, color:'#B4573A', alpha:p }); }
+    });
+    D.arrow({ a:[lc + 1.25, gy, .08], b:[lc + 1.72, gy, .08], color:'#25804D', alpha:seg(t, 3.6, 4.2) });
+    D.text({ x:lc + 1.45, y:gy + .26, z:.1, text:'h_t', size:11, mono:true, weight:700, color:GREEN_INK, alpha:seg(t, 3.6, 4.2) });
+    D.text({ x:lc - .5, y:1.32, z:.1, text:'вход: h_{t−1}, x_t', size:11, mono:true, weight:700, color:M_INK, alpha:a0 });
+    // справа: роли гейтов → параметры
+    const RX = wd ? 2.30 : 2.20;
+    [['forget: что стереть', PILL_BAD, '#B4573A'], ['input: что записать', TAG, BLUE_INK], ['output: что показать', PILL_OK, GREEN_INK]].forEach(([s2, bg, col], i) =>
+      mtChip(D, RX, 3.20 - i * .58, s2, seg(t, 1.0 + i * 1.4, 1.6 + i * 1.4) * (1 - kG), { mono:false, size:11, color:col, bg }));
+    mtChip(D, RX, 1.46, 'c_t: градиент живёт дольше', kM * (1 - kG), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    if (kG < .01) return;
+    const R = mAx(wd ? 1.05 : 1.15, 1.48, wd ? 2.55 : 2.45, 1.92, [.4, 3.6], [0, 145]), names = ['RNN', 'GRU', 'LSTM'];
+    mFrame(D, R, { a:kG, spines:{ l:1, b:1 }, xt:[1, 2, 3], xtl:(v, i) => names[i], yt:[0, 60, 120], grid:.4 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'параметры, тыс. (h = 128)', size:11.5, weight:700, color:C.ink, alpha:kG });
+    [[1, 29.4, 0], [2, 88.3, 2], [3, 117.8, 1]].forEach(([x, v, c], i) => {
+      const k = seg(t, 12.6 + i * .7, 13.4 + i * .7); if (k < .01) return;
+      mBar(D, R, x, v, { k, w:.5, c });
+      D.text({ x:R.X(x), y:R.Y(v * k) + .16, z:.1, text:String(v).replace('.', ','), size:11, weight:700, color:C.ink, alpha:k });
+    });
+  } },
+
+{ title:'Сравнение и Bi-RNN', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Сравним на IMDB: baseline на усреднённых embeddings, RNN, LSTM и GRU — по качеству, времени эпохи и параметрам.', code:'x = emb(tokens).mean(1)  # baseline' },
+    { t:6.0, text:'Порядок слов даёт LSTM и GRU прирост над baseline, а простая RNN на длинных отзывах теряет контекст и отстаёт.', code:'# цифры иллюстративные', hold:3.8 },
+    { t:12.0, text:'Bidirectional читает отзыв слева и справа и видит весь контекст: годится для классификации, но не для next word.', code:'nn.LSTM(100, 128, bidirectional=True)' }],
+  hud:t => t < 6.0 ? [['baseline', '≈ 0,85']] : t < 12.0 ? [['LSTM / GRU', '≈ 0,88', 'f'], ['RNN', '≈ 0,80']] : [['Bi', '← и →', 'i']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kB = seg(t, 12.0, 12.8);
+    const R = mAx(wd ? -3.20 : -3.05, 1.48, wd ? 2.85 : 2.65, 1.92, [.4, 4.6], [.7, .92]), names = ['mean', 'RNN', 'LSTM', 'GRU'];
+    mFrame(D, R, { sp:a0, spines:{ l:1, b:1 }, ticks:a0, xt:[1, 2, 3, 4], xtl:(v, i) => names[i], yt:[.7, .8, .9], ytl:v => String(v).replace('.', ','), grid:.4 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'IMDB, accuracy (иллюстр.)', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    [[1, .85, .8, 5], [2, .80, 6.4, 3], [3, .88, 7.4, 0], [4, .88, 8.4, 2]].forEach(([x, acc, t0, c]) => {
+      const k = seg(t, t0, t0 + 1.0); if (k < .01) return;
+      mBar(D, R, x, acc - .7, { base:.7, k, w:.5, c });
+      D.text({ x:R.X(x), y:R.Y(.7 + (acc - .7) * k) + .16, z:.1, text:acc.toFixed(2).replace('.', ','), size:11, weight:700, color:C.ink, alpha:k });
+    });
+    const RX = wd ? 2.25 : 2.15;
+    D.text({ x:RX, y:3.62, z:.1, text:'время эпохи · параметры', size:11.5, weight:700, color:C.ink, alpha:a0 * (1 - kB) });
+    [['mean · 3 с · 0,2 тыс.', .9], ['RNN · 25 с · 29 тыс.', 6.6], ['LSTM · 40 с · 118 тыс.', 7.6], ['GRU · 32 с · 88 тыс.', 8.6]].forEach(([s2, t0], i) =>
+      mtChip(D, RX, 3.15 - i * .52, s2, seg(t, t0, t0 + .6) * (1 - kB), { mono:false, size:11, color:i === 1 ? '#B4573A' : i > 1 ? GREEN_INK : C.ink, bg:i === 1 ? PILL_BAD : i > 1 ? PILL_OK : TAG }));
+    D.text({ x:RX, y:1.25, z:.1, text:'без учёта Embedding', size:11, weight:700, color:M_INK, alpha:seg(t, 9.4, 10.0) * (1 - kB) });
+    if (kB < .01) return;
+    // bidirectional: прямой и обратный проход
+    const bs = .9, tx = [0, 1, 2, 3].map(j => RX + (j - 1.5) * bs);
+    D.text({ x:RX, y:3.62, z:.1, text:'Bidirectional', size:11.5, weight:700, color:C.ink, alpha:kB });
+    D.text({ x:RX, y:3.26, z:.1, text:'прямой →', size:11, weight:700, color:BLUE_INK, alpha:kB });
+    D.arrow({ a:[tx[0] - .3, 2.98, .08], b:[tx[0] - .3 + (tx[3] - tx[0] + .6) * seg(t, 12.4, 13.6), 2.98, .08], color:'#3B6FD4', alpha:kB });
+    ['фильм', 'не', 'такой', 'плохой'].forEach((w, j) => mtChip(D, tx[j], 2.50, w, kB, { mono:false, size:11, bg:TAG }));
+    D.arrow({ a:[tx[3] + .3, 2.02, .08], b:[tx[3] + .3 - (tx[3] - tx[0] + .6) * seg(t, 13.6, 14.8), 2.02, .08], color:'#D97B29', alpha:seg(t, 13.6, 13.9) });
+    D.text({ x:RX, y:1.76, z:.1, text:'← обратный', size:11, weight:700, color:'#B4573A', alpha:seg(t, 13.6, 14.2) });
+    mtChip(D, RX - .95, 1.30, 'весь отзыв ✓', seg(t, 15.0, 15.6), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    mtChip(D, RX + 1.1, 1.30, 'next word ✗', seg(t, 15.6, 16.2), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+  } }
+];
+
+const DL6_META = [
+  { intro:'Почему порядок слов важен и как RNN его запоминает.',
+    key:'RNN читает токены по одному и несёт hidden state h_t; одна ячейка с общими весами развёрнута на T шагов.',
+    keySay:'Главное. Эр-эн-эн читает токены по одному и передаёт хидден стэйт дальше; это одна и та же ячейка с общими весами, развёрнутая по времени.',
+    says:['Возьмём задачу: по отзыву на фильм из ай-эм-ди-би понять, позитивный он или негативный. Сравните: «фильм не плохой» и «фильм плохой, не смотрите». Слова почти те же, а смысл противоположный. Значит, модель должна учитывать порядок слов.',
+          'Рекуррентная сеть, эр-эн-эн, читает отзыв по одному токену. На каждом шаге она смешивает текущее слово с хидден стэйт, памятью о прочитанном, и пропускает через тангенс. Новое состояние передаётся на следующий шаг.',
+          'Если развернуть эр-эн-эн по времени, получится цепочка одинаковых ячеек с общими весами. После последнего токена финальное скрытое состояние идёт в линейный слой, и он решает: позитив или негатив.'],
+    terms:[['token', 'слово или его часть'], ['hidden state h_t', 'память о прочитанном'], ['развёртка', '1 ячейка × T шагов']] },
+  { intro:'Как текст превращается в числа и обучаемые векторы.',
+    key:'Текст → токены → индексы словаря (только по train, <pad> = 0, <unk> = 1) → nn.Embedding: обучаемый плотный вектор на токен.',
+    keySay:'Главное. Текст режут на токены, токены заменяют индексами вокабуляри, построенного только по трейну, а эмбеддинг превращает индекс в обучаемый плотный вектор.',
+    says:['Сеть не читает буквы, ей нужны числа. Отзыв режем на токены, а каждому токену даём номер из словаря, вокабуляри. Строим его только по трейну, чтобы не подглядывать в тест. Номер ноль — пэд, номер один — анк, для незнакомых слов.',
+          'Дальше работает эмбеддинг — таблица размером вокабуляри на d. Индекс токена просто выбирает её строку: плотный вектор, например из ста чисел. Эти числа — обычные веса, они учатся обратным распространением вместе со всей сетью.',
+          'В начале векторы случайные, и «отличный» ничем не ближе к «шикарный», чем к «ужасный». Но в процессе обучения слова похожей тональности сдвигаются друг к другу. Сходство не задают заранее, оно появляется из задачи.'],
+    terms:[['vocabulary', 'токен → индекс, по train'], ['<pad> / <unk>', '0 / 1'], ['nn.Embedding', 'обучаемая таблица V × d']] },
+  { intro:'Padding выравнивает батч, но PAD нельзя путать со словами.',
+    key:'Батч дополняют <pad> и хранят lengths; padding_idx не скрывает PAD от RNN — нужны маска, h[len − 1] или pack_padded_sequence.',
+    keySay:'Главное. Пэддинг выравнивает длины, но эр-эн-эн честно читает каждый пэд, поэтому берём последнее реальное состояние по длинам, маскинг или пэк-пэддед-сиквенс.',
+    says:['Отзывы бывают разной длины, а батч — прямоугольная матрица. Поэтому короткие отзывы дополняют пэдом, нулевым токеном, до длины самого длинного. Это пэддинг. Рядом обязательно храним настоящие длины каждого отзыва.',
+          'Параметр пэддинг-идэкс у эмбеддинга лишь запрещает обновлять вектор пэда. Но сама эр-эн-эн его не пропускает: она шаг за шагом читает пэды, и состояние короткого отзыва на этом хвосте размывается. Уверенность падает с восьмидесяти шести до пятидесяти семи сотых.',
+          'Поэтому берём последнее реальное скрытое состояние по длинам или используем маскинг. А ещё лучше — пэк-пэддед-сиквенс: он упаковывает батч так, что эр-эн-эн вообще не делает шагов по пэдам.'],
+    terms:[['padding', 'выравнивание батча <pad>'], ['padding_idx', 'не учит PAD, не скрывает'], ['pack_padded_sequence', 'RNN пропускает PAD']] },
+  { intro:'Почему градиент RNN гаснет или взрывается на длинных отзывах.',
+    key:'BPTT умножает градиент на T множителей: < 1 — затухание, > 1 — взрыв; clip_grad_norm_ ограничивает норму перед шагом.',
+    keySay:'Главное. Би-пи-ти-ти перемножает множители по всем шагам, поэтому градиент затухает или взрывается, а градиент-клиппинг ограничивает его норму перед шагом оптимизатора.',
+    says:['Как учится эр-эн-эн? Граф развёрнут на столько шагов, сколько токенов в отзыве, и обратное распространение идёт по нему назад во времени. Это называется би-пи-ти-ти. Градиент для первых слов — произведение множителей всех шагов.',
+          'Если множители чуть меньше единицы, произведение быстро стремится к нулю: девять десятых в двухсотой степени — это семь десятимиллиардных. Сеть забывает начало длинного отзыва. Если чуть больше единицы — градиент взрывается до сотен миллионов.',
+          'Против взрыва помогает градиент-клиппинг. Перед шагом оптимизатора норму градиента обрезают до порога, например единицы. Направление сохраняется, а редкие всплески больше не ломают веса. С затуханием так не справиться, для него нужны другие ячейки.'],
+    terms:[['BPTT', 'backprop через T шагов'], ['vanishing / exploding', '∏ < 1 / ∏ > 1'], ['clip_grad_norm_', '‖g‖ ≤ порог']] },
+  { intro:'Гейты LSTM и GRU помогают помнить длинный контекст.',
+    key:'LSTM: память c_t и гейты forget, input, output; GRU: update и reset, ≈ 3/4 параметров LSTM. Выбор — по эксперименту.',
+    keySay:'Главное. Эл-эс-тэ-эм хранит отдельную память и управляет ею гейтами, а джи-ар-ю делает почти то же компактнее; какая лучше, решает эксперимент.',
+    says:['Эл-эс-тэ-эм добавляет к скрытому состоянию отдельную ячейку памяти, цэ-тэ. Ею управляют три гейта, числа от нуля до единицы. Форгет-гейт решает, что стереть из памяти, инпут — что записать нового, аутпут — что показать наружу.',
+          'Главная хитрость — линия памяти. По ней информация течёт почти без умножений на матрицу весов, только поэлементно через гейты. Поэтому градиент живёт дольше, и сеть помнит начало длинного отзыва.',
+          'Джи-ар-ю — упрощённый вариант: два гейта, апдейт и ресет, и нет отдельной ячейки памяти. Параметров примерно три четверти от эл-эс-тэ-эм, учится быстрее. Какая из них лучше на ваших данных, заранее не скажешь — это проверяют экспериментом.'],
+    terms:[['LSTM', 'c_t + гейты f, i, o'], ['GRU', 'гейты update, reset'], ['параметры', 'GRU ≈ 3/4 LSTM']] },
+  { intro:'Сравниваем модели и смотрим на двунаправленную RNN.',
+    key:'Baseline на средних embeddings — быстрая точка отсчёта; LSTM/GRU учитывают порядок; bidirectional видит контекст с двух сторон.',
+    keySay:'Главное. Сначала быстрый бейзлайн, потом рекуррентные модели; двунаправленная сеть видит весь отзыв, но годится только когда текст известен целиком.',
+    says:['Сравним модели на ай-эм-ди-би, цифры иллюстративные. Бейзлайн просто усредняет эмбеддинги отзыва и подаёт их в линейный слой. Он не знает порядка слов, но обучается за секунды и уже даёт около восьмидесяти пяти процентов.',
+          'Эл-эс-тэ-эм и джи-ар-ю учитывают порядок и обходят бейзлайн, хотя эпоха у них в десять раз дольше. А простая эр-эн-эн на длинных отзывах теряет контекст из-за затухания и может оказаться даже хуже бейзлайна.',
+          'Подведём итог. Двунаправленная сеть читает отзыв слева направо и справа налево и склеивает оба состояния. Для классификации готового отзыва это отлично. Но предсказывать следующее слово в реальном времени так нельзя: правого контекста ещё нет.'],
+    terms:[['baseline', 'mean(embeddings) → Linear'], ['LSTM / GRU', 'порядок слов, дольше'], ['bidirectional', 'левый + правый контекст']] }
+];
+
+const DL6_CHEAT = `<span class="kw">import</span> torch, torch.nn <span class="kw">as</span> nn
+<span class="kw">from</span> torch.nn.utils.rnn <span class="kw">import</span> pad_sequence, pack_padded_sequence
+
+<span class="c"># 1. Словарь только по train: &lt;pad&gt;=0, &lt;unk&gt;=1</span>
+ids = [torch.<span class="fn">tensor</span>([vocab.<span class="fn">get</span>(w, 1) <span class="kw">for</span> w <span class="kw">in</span> toks]) <span class="kw">for</span> toks <span class="kw">in</span> batch]
+lengths = torch.<span class="fn">tensor</span>([<span class="fn">len</span>(x) <span class="kw">for</span> x <span class="kw">in</span> ids])
+x = <span class="fn">pad_sequence</span>(ids, batch_first=<span class="kw">True</span>, padding_value=0)
+
+<span class="kw">class</span> <span class="fn">Sentiment</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, V, d=100, h=128):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.emb = nn.<span class="fn">Embedding</span>(V, d, padding_idx=0)   <span class="c"># PAD не учится, но не скрыт</span>
+        self.rnn = nn.<span class="fn">LSTM</span>(d, h, batch_first=<span class="kw">True</span>, bidirectional=<span class="kw">True</span>)
+        self.fc = nn.<span class="fn">Linear</span>(2 * h, 2)
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x, lengths):
+        p = <span class="fn">pack_padded_sequence</span>(self.<span class="fn">emb</span>(x), lengths.<span class="fn">cpu</span>(), batch_first=<span class="kw">True</span>, enforce_sorted=<span class="kw">False</span>)
+        _, (h, c) = self.<span class="fn">rnn</span>(p)                        <span class="c"># h: последнее реальное состояние</span>
+        <span class="kw">return</span> self.<span class="fn">fc</span>(torch.<span class="fn">cat</span>([h[-2], h[-1]], 1))  <span class="c"># → и ←</span>
+
+<span class="c"># 2. Шаг обучения с градиент-клиппингом</span>
+loss.<span class="fn">backward</span>()
+nn.utils.<span class="fn">clip_grad_norm_</span>(model.<span class="fn">parameters</span>(), 1.0)
+opt.<span class="fn">step</span>(); opt.<span class="fn">zero_grad</span>()`;
+
+applyMeta(DL6_SCENES, DL6_META);
+DL_LESSONS.push({ short:'RNN, LSTM и GRU', title:'Последовательности: RNN, LSTM и GRU',
+  intro:{ eyebrow:'Тема 06 · Deep Learning', title:'Как сеть читает текст слово за словом',
+          text:'Почему порядок слов важен, как RNN несёт hidden state, откуда берутся токены и Embedding, зачем padding, длины и маски, почему градиент гаснет или взрывается и как LSTM, GRU и bidirectional решают задачу тональности IMDB.',
+          meta:'6 сцен · около 4 минут в спокойном темпе' },
+  end:{ title:'Память о порядке слов', text:'RNN читает токены по одному и несёт hidden state, Embedding превращает индексы в обучаемые векторы, а маски и длины отделяют слова от PAD. BPTT гасит или раздувает градиент: clipping режет всплески, LSTM и GRU помнят дольше.',
+        rule:'Начни с baseline, учитывай lengths и PAD, сравни LSTM и GRU на опыте.' },
+  legend:[['#86A8F0', 'токен · RNN'], ['#F4A766', 'текущий шаг · LSTM'], ['#3A9E4F', 'реальное h · GRU'], ['#D9534A', 'PAD · взрыв']],
+  cheat:DL6_CHEAT,
+  scenes:DL6_SCENES });
 
 const DL_UPCOMING = [];
 
