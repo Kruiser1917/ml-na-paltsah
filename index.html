@@ -16230,7 +16230,370 @@ DL_LESSONS.push({ short:'RNN, LSTM и GRU', title:'Последовательн�
   cheat:DL6_CHEAT,
   scenes:DL6_SCENES });
 
-const DL_UPCOMING = [];
+/* =========================================================================
+   DL — Lesson 7: Attention & Transformers (AG News, illustrative numbers)
+   ========================================================================= */
+// дуга-кривая Безье между двумя точками на одной высоте (связь attention)
+function dl7Arc(D, x1, x2, y, hh, o = {}){
+  const a = o.a ?? 1; if (a < .01) return;
+  const mx = (x1 + x2) / 2, pts = [];
+  for (let i = 0; i <= 16; i++){ const u = i / 16; pts.push([lerp(lerp(x1, mx, u), lerp(mx, x2, u), u), y + 2 * u * (1 - u) * hh, .06]); }
+  D.poly({ pts, color:o.color ?? '#3B6FD4', width:o.w ?? .03, alpha:a, layer:o.layer ?? 56 });
+}
+// смешение двух цветов 0xRRGGBB, k ∈ [0, 1]
+const dl7Mix = (c1, c2, k) => [16, 8, 0].reduce((r, s) => r + (Math.round(lerp((c1 >> s) & 255, (c2 >> s) & 255, clamp01(k))) << s), 0);
+// сетка весов n × n: fn(i, j) → вес (null = замаскировано)
+function dl7Grid(D, cx, cy, n, cs, fn, a, hot = 0x3B6FD4){
+  if (a < .01) return;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++){
+    const v = fn(i, j), x = cx + (j - (n - 1) / 2) * cs, y = cy + ((n - 1) / 2 - i) * cs;
+    D.box({ x, y, z:0, w:cs * .88, h:cs * .88, d:.05, round:.2, shadow:false, color:v === null ? 0xB9BFCB : dl7Mix(0xEEF1F7, hot, v * 1.8), alpha:a });
+  }
+}
+// softmax строки с маской (null = −∞)
+const dl7Soft = r => { const e = r.map(v => v === null ? 0 : Math.exp(v)), s = e.reduce((p, q) => p + q, 0); return r.map((v, j) => v === null ? null : e[j] / s); };
+const DL7_TOK = ['Apple', 'shares', 'rose', 'after', 'earnings'];
+
+const DL7_SCENES = [
+{ title:'От RNN к Attention', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'RNN передаёт смысл по цепочке: от первого токена к последнему информация проходит через все шаги по очереди.', code:'h_t = f(h_{t-1}, x_t)  # T шагов' },
+    { t:6.0, text:'В attention каждый токен напрямую смотрит на все остальные: путь между любыми двумя словами — один шаг.', code:'out_i = Σ_j a_ij · v_j  # путь = 1', hold:3.8 },
+    { t:12.0, text:'Все пары токенов считаются одной матричной операцией параллельно, а не T шагами подряд, как в RNN.', code:'# T × T пар за одну операцию' }],
+  hud:t => t < 6.0 ? [['RNN', 'T шагов']] : t < 12.0 ? [['путь', '1 шаг', 'i']] : [['пары', 'T × T', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), s = wd ? 1 : .9, a0 = seg(t, .2, .9), kA = seg(t, 6.0, 6.8), kP = seg(t, 12.0, 12.8), p0 = a0 * (1 - kA);
+    const xs = [-2.8, -1.4, 0, 1.4, 2.8].map(v => v * s);
+    DL7_TOK.forEach((w, j) => mtChip(D, xs[j], 1.40, w, seg(t, .4 + j * .2, .9 + j * .2), { mono:false, size:11.5, bg:j === 4 && kA > .5 && kP < .5 ? PILL_HOT : TAG }));
+    // фаза 0: цепочка RNN
+    D.text({ x:0, y:3.62, z:.1, text:'RNN: информация идёт по цепочке', size:11.5, weight:700, color:C.ink, alpha:p0 });
+    xs.forEach((x, j) => {
+      D.box({ x, y:2.45, z:0, w:.78, h:.5, d:.1, round:.3, shadow:false, color:0xC9D6F7, alpha:p0 });
+      D.text({ x, y:2.45, z:.12, text:'h' + (j + 1), size:12, mono:true, weight:700, color:C.ink, alpha:p0 });
+      D.arrow({ a:[x, 1.62, .08], b:[x, 2.17, .08], color:'#7D869B', alpha:p0 });
+      if (j < 4) D.arrow({ a:[x + .42, 2.45, .08], b:[xs[j + 1] - .42, 2.45, .08], color:'#D97B29', alpha:p0 });
+    });
+    const kR = clamp01((t - 1.6) / 3.2);
+    if (p0 > .01 && t > 1.6) D.sphere({ x:lerp(xs[0], xs[4], kR), y:2.82, z:.08, r:.07, color:0xD97B29, alpha:p0, shadow:false, layer:58 });
+    mtChip(D, 0, 3.18, 'Apple → earnings: 4 шага подряд', seg(t, 3.4, 4.0) * (1 - kA), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    if (kA < .01) return;
+    // фаза 1: earnings смотрит на всех напрямую
+    const pA = kA * (1 - kP);
+    D.text({ x:0, y:3.62, z:.1, text:'Attention: каждый смотрит на всех', size:11.5, weight:700, color:C.ink, alpha:pA });
+    [0, 1, 2, 3].forEach(j => dl7Arc(D, xs[4], xs[j], 1.62, .42 * (xs[4] - xs[j]), { a:pA * seg(t, 6.6 + j * .3, 7.1 + j * .3), w:.035 }));
+    mtChip(D, 0, 3.18, 'earnings → Apple: 1 шаг', seg(t, 8.4, 9.0) * (1 - kP), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    if (kP < .01) return;
+    // фаза 2: все пары параллельно
+    D.text({ x:0, y:3.62, z:.1, text:'Все пары — одна матричная операция', size:11.5, weight:700, color:C.ink, alpha:kP });
+    for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++)
+      dl7Arc(D, xs[i], xs[j], 1.62, .42 * (xs[j] - xs[i]), { color:'#7D869B', a:kP * seg(t, 12.4 + i * .3, 13.0 + i * .3) * .8, w:.025 });
+    mtChip(D, -1.55 * s, 3.18, 'RNN: T шагов подряд', seg(t, 13.6, 14.2), { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    mtChip(D, 1.55 * s, 3.18, 'attention: параллельно', seg(t, 14.4, 15.0), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Embeddings и позиция', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Self-attention сам не знает порядок: переставим токены — и получим те же выходы, просто в другом порядке.', code:'# attn(perm(X)) == perm(attn(X))' },
+    { t:6.0, text:'Поэтому к token embedding прибавляют positional encoding: синусоиды разной частоты или обучаемый вектор позиции.', code:'x = tok_emb(ids) + pos_emb(pos)', hold:3.8 },
+    { t:12.0, text:'Сумма имеет форму [B, T, d_model]: каждый вектор теперь несёт и смысл токена, и его место в заголовке.', code:'x.shape  # [B, T, d_model]' }],
+  hud:t => t < 6.0 ? [['порядок', 'не виден']] : t < 12.0 ? [['x', 'emb + PE', 'i']] : [['форма', '[B, T, d]', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), s = wd ? 1 : .9, a0 = seg(t, .2, .9), kE = seg(t, 6.0, 6.8), kS = seg(t, 12.0, 12.8), p0 = a0 * (1 - kE);
+    // фаза 0: перестановка не меняет набор выходов
+    D.text({ x:0, y:3.62, z:.1, text:'Без позиции порядок не виден', size:11.5, weight:700, color:C.ink, alpha:p0 });
+    [['Apple', 'buys', 'startup'], ['startup', 'buys', 'Apple']].forEach((r, i) => {
+      const y = i ? 2.40 : 3.05, t0 = .6 + i * 1.4, ka = seg(t, t0 + 1.0, t0 + 1.5) * (1 - kE);
+      r.forEach((w, j) => mtChip(D, (-2.9 + j * 1.1) * s, y, w, seg(t, t0 + j * .25, t0 + .5 + j * .25) * (1 - kE), { mono:false, size:11.5, bg:TAG }));
+      D.arrow({ a:[-.25 * s, y, .08], b:[.75 * s, y, .08], color:'#7D869B', alpha:ka });
+      mtChip(D, 2.1 * s, y, 'те же 3 вектора', ka, { mono:false, size:11, color:'#B4573A', bg:PILL_BAD });
+    });
+    D.text({ x:0, y:1.62, z:.1, text:'«Apple buys…» и «startup buys…» неразличимы', size:11.5, weight:700, color:'#B4573A', alpha:seg(t, 4.0, 4.6) * (1 - kE) });
+    if (kE < .01) return;
+    // фаза 1: emb + PE (слева), синусоиды PE (справа)
+    const lx = wd ? -2.05 : -1.95, cols = [[-1.0, 'token', 0xC9D6F7], [0, 'pos', 0xFBD9B5], [1.0, 'x', 0xC9EBD5]], ry = [2.85, 2.47, 2.09, 1.71];
+    D.text({ x:lx, y:3.62, z:.1, text:'token + позиция', size:11.5, weight:700, color:C.ink, alpha:kE });
+    cols.forEach(([dx, lb, col], c) => {
+      const k = seg(t, 6.4 + c * .8, 7.0 + c * .8);
+      D.text({ x:lx + dx, y:3.25, z:.1, text:lb, size:11, mono:true, weight:700, color:M_INK, alpha:k });
+      ry.forEach(y => D.box({ x:lx + dx, y, z:0, w:.34, h:.32, d:.06, round:.25, shadow:false, color:c === 2 && kS > .5 ? 0x9FD8B4 : col, alpha:k }));
+    });
+    D.text({ x:lx - .5, y:2.28, z:.1, text:'+', size:12.5, weight:800, color:C.ink, alpha:seg(t, 7.0, 7.4) });
+    D.text({ x:lx + .5, y:2.28, z:.1, text:'=', size:12.5, weight:800, color:C.ink, alpha:seg(t, 7.8, 8.2) });
+    mtChip(D, lx, 1.28, 'смысл + место', seg(t, 13.0, 13.6), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    const pS = kE * (1 - kS), R = mAx(wd ? .80 : .95, 1.48, wd ? 2.95 : 2.75, 1.92, [0, 20], [-1.25, 1.25]), ps = Array.from({ length:41 }, (_, i) => i / 2);
+    mFrame(D, R, { a:pS, spines:{ l:1, b:1 }, xt:[0, 10, 20], yt:[-1, 0, 1], grid:.4 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:'PE: синусоиды по позиции', size:11.5, weight:700, color:C.ink, alpha:pS });
+    [[1.2, 0], [3, 1], [7, 2]].forEach(([w, c], i) => mLine(D, R, ps, ps.map(p => Math.sin(p / w)), { c, k:seg(t, 7.4 + i * .9, 8.6 + i * .9), a:pS, lw:.035 }));
+    if (kS < .01) return;
+    // фаза 2: тензор [B, T, d_model]
+    const RX = wd ? 2.15 : 2.05;
+    D.text({ x:RX, y:3.62, z:.1, text:'x: [B, T, d_model]', size:11.5, mono:true, weight:700, color:C.ink, alpha:kS });
+    [2, 1, 0].forEach(b => D.box({ x:RX + b * .14, y:2.45 + b * .14, z:-b * .1, w:2.1, h:.95, d:.08, round:.1, shadow:false, color:b ? 0xDDE5F8 : 0xC9EBD5, alpha:kS * seg(t, 12.4 + (2 - b) * .3, 12.9 + (2 - b) * .3) }));
+    D.text({ x:RX, y:2.45, z:.2, text:'T позиций × d_model', size:11, weight:700, color:C.ink, alpha:seg(t, 13.4, 14.0) });
+    mtChip(D, RX, 1.55, 'B = 32 · T = 40 · d = 256', seg(t, 14.2, 14.8), { size:11, bg:TAG });
+  } },
+
+{ title:'Query, Key, Value', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Из каждого вектора x три линейных слоя делают три роли: Q — что ищу, K — что предлагаю, V — что передам.', code:'Q, K, V = x @ W_q, x @ W_k, x @ W_v' },
+    { t:6.0, text:'Q токена «shares» умножаем на K всех токенов — это строка QKᵀ; softmax делает из неё веса с суммой 1.', code:'w = softmax(q @ K.T)  # Σ w = 1', hold:3.8 },
+    { t:12.0, text:'Выход — смесь векторов V с этими весами: «shares» берёт больше всего от «Apple» и «earnings», мало от «after».', code:'out = w @ V' }],
+  hud:t => t < 6.0 ? [['роли', 'Q · K · V']] : t < 12.0 ? [['Σ весов', '1,00', 'i']] : [['out', 'Σ w · v', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), s = wd ? 1 : .9, a0 = seg(t, .2, .9), kW = seg(t, 6.0, 6.8), kO = seg(t, 12.0, 12.8), p0 = a0 * (1 - kW);
+    // фаза 0: x → Q, K, V
+    const qkv = [['Q', 0xFBD9B5, 'Q — что ищу', '#B4573A', PILL_HOT], ['K', 0xC9D6F7, 'K — что предлагаю', BLUE_INK, TAG], ['V', 0xC9EBD5, 'V — что передам', GREEN_INK, PILL_OK]];
+    D.text({ x:0, y:3.62, z:.1, text:'Один x — три роли', size:11.5, weight:700, color:C.ink, alpha:p0 });
+    D.box({ x:-2.6 * s, y:2.40, z:0, w:.7, h:.5, d:.1, round:.3, shadow:false, color:0xE9ECF2, alpha:p0 });
+    D.text({ x:-2.6 * s, y:2.40, z:.12, text:'x', size:12.5, mono:true, weight:800, color:C.ink, alpha:p0 });
+    mtChip(D, -1.65 * s, 1.40, 'W_q · W_k · W_v', seg(t, 2.6, 3.2) * (1 - kW), { size:11, bg:TAG });
+    qkv.forEach(([n, col, role, ink, bg], i) => {
+      const y = 3.05 - i * .65, k = seg(t, .8 + i * 1.0, 1.4 + i * 1.0) * (1 - kW);
+      D.arrow({ a:[-2.2 * s, 2.40, .08], b:[-1.05 * s, y, .08], color:'#7D869B', alpha:k });
+      D.box({ x:-.7 * s, y, z:0, w:.6, h:.46, d:.1, round:.3, shadow:false, color:col, alpha:k });
+      D.text({ x:-.7 * s, y, z:.12, text:n, size:12.5, mono:true, weight:800, color:C.ink, alpha:k });
+      mtChip(D, 1.45 * s, y, role, seg(t, 3.6 + i * .5, 4.2 + i * .5) * (1 - kW), { mono:false, size:11, color:ink, bg });
+    });
+    if (kW < .01) return;
+    // фаза 1–2: веса внимания для «shares»
+    const xs = [-2.8, -1.4, 0, 1.4, 2.8].map(v => v * s), w = [.38, .14, .10, .04, .34];
+    DL7_TOK.forEach((tk, j) => mtChip(D, xs[j], 1.32, tk, kW, { mono:false, size:11.5, bg:j === 1 ? PILL_HOT : TAG }));
+    D.text({ x:0, y:3.62, z:.1, text:'softmax(q_shares · K)', size:11.5, mono:true, weight:700, color:C.ink, alpha:kW * (1 - kO) });
+    w.forEach((v, j) => {
+      const k = seg(t, 6.8 + j * .35, 7.6 + j * .35) * (1 - kO), h = v * 2.6 * k;
+      if (k < .01) return;
+      D.box({ x:xs[j], y:1.58 + h / 2, z:0, w:.5, h:Math.max(.01, h), d:.12, round:.3, shadow:false, color:j === 0 || j === 4 ? 0x86A8F0 : 0xC9D6F7, alpha:kW });
+      D.text({ x:xs[j], y:1.58 + h + .16, z:.1, text:v.toFixed(2).replace('.', ','), size:11, weight:700, color:C.ink, alpha:k });
+    });
+    mtChip(D, 0, 3.22, 'Σ = 1,00', seg(t, 9.0, 9.6) * (1 - kO), { size:11, color:GREEN_INK, bg:PILL_OK });
+    if (kO < .01) return;
+    D.text({ x:0, y:3.62, z:.1, text:'out(shares) = Σ w_j · v_j', size:11.5, mono:true, weight:700, color:C.ink, alpha:kO });
+    [0, 2, 3, 4].forEach(j => { const hh = .38 * Math.abs(xs[j] - xs[1]) + .5, ka = kO * seg(t, 12.6, 13.4);
+      dl7Arc(D, xs[1], xs[j], 1.55, hh, { color:'#25804D', a:ka, w:.012 + w[j] * .13 });
+      D.text({ x:(xs[1] + xs[j]) / 2, y:1.55 + hh / 2 + .16, z:.1, text:w[j].toFixed(2).replace('.', ','), size:11, weight:700, color:GREEN_INK, alpha:ka * (w[j] > .3) }); });
+    mtChip(D, 0, 3.22, 'Apple + earnings ≈ 72 %', seg(t, 14.0, 14.6), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Scaling и маски', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Скалярное произведение растёт с размерностью d_k, поэтому его делят на √d_k — иначе softmax почти one-hot.', code:'softmax(Q @ K.T / sqrt(d_k))' },
+    { t:6.0, text:'Padding mask ставит −inf на PAD-колонки до softmax: их вес становится 0, а строка по реальным токенам даёт 1.', code:'s.masked_fill(pad_mask, -inf)', hold:3.8 },
+    { t:12.0, text:'Causal mask — треугольная: токен видит только себя и прошлое. Так работают декодеры, пишущие текст слева направо.', code:'torch.triu(torch.ones(T, T), 1)' }],
+  hud:t => t < 6.0 ? [['÷', '√d_k']] : t < 12.0 ? [['PAD', '−∞ → 0', 'i']] : [['видит', 'j ≤ i', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kP = seg(t, 6.0, 6.8), kC = seg(t, 12.0, 12.8);
+    // слева, фаза 0: softmax без и с масштабом
+    const pL = a0 * (1 - kP), R = mAx(wd ? -3.20 : -3.05, 1.48, wd ? 2.85 : 2.65, 1.92, [.4, 4.6], [0, 1]), kS = seg(t, 2.6, 4.6);
+    mFrame(D, R, { a:pL, spines:{ l:1, b:1 }, xt:[1, 2, 3, 4], xtl:(v, i) => 'k' + (i + 1), yt:[0, .5, 1], ytl:v => String(v).replace('.', ','), grid:.4 });
+    D.text({ x:R.cx, y:R.y1 + .24, z:.1, text:kS < .5 ? 'softmax без √d_k' : 'softmax с √d_k', size:11.5, weight:700, color:kS < .5 ? '#B4573A' : GREEN_INK, alpha:pL });
+    [[.96, .45], [.02, .25], [.01, .18], [.01, .12]].forEach(([u, v], j) => {
+      const val = lerp(u, v, kS), k = seg(t, .6 + j * .3, 1.2 + j * .3);
+      mBar(D, R, j + 1, val, { k, w:.5, c:j ? 0 : 3, a:pL });
+      D.text({ x:R.X(j + 1), y:R.Y(val * k) + .16, z:.1, text:val.toFixed(2).replace('.', ','), size:11, weight:700, color:C.ink, alpha:pL * k });
+    });
+    // слева, фазы 1–2: пояснения к маскам
+    const lx = wd ? -1.75 : -1.65;
+    [['scores[:, PAD] = −∞', PILL_BAD, '#B4573A'], ['exp(−∞) = 0', TAG, C.ink], ['Σ по реальным = 1', PILL_OK, GREEN_INK]].forEach(([s2, bg, col], i) =>
+      mtChip(D, lx, 3.05 - i * .6, s2, seg(t, 7.0 + i * 1.0, 7.6 + i * 1.0) * (1 - kC), { size:11, color:col, bg }));
+    [['токен i видит j ≤ i', TAG, BLUE_INK], ['будущее = −∞', PILL_BAD, '#B4573A'], ['decoder: слева направо', PILL_OK, GREEN_INK]].forEach(([s2, bg, col], i) =>
+      mtChip(D, lx, 3.05 - i * .6, s2, seg(t, 12.8 + i * 1.0, 13.4 + i * 1.0), { mono:i === 0 ? false : i === 1, size:11, color:col, bg }));
+    // справа: матрица весов 5 × 5
+    const RX = wd ? 2.15 : 2.10, cy = 2.25, cs = .36, S = [[2, 1, 0, .5, -.5], [1, 2, .5, 0, 1.5], [.5, 1, 2, 1, 0], [0, .5, 1, 2, 1], [1, 0, .5, 1, 2]];
+    const nPad = kP > .5 && kC < .5 ? 2 : 0, causal = kC > .5;
+    const Wm = S.map((r, i) => dl7Soft(r.map((v, j) => (causal && j > i) || j >= 5 - nPad ? null : v)));
+    const pR = a0 * (kP < .5 ? 1 - kP * 2 : kC < .5 ? (kP - .5) * 2 * (1 - kC * 2) : (kC - .5) * 2);
+    D.text({ x:RX, y:3.62, z:.1, text:causal ? 'causal mask' : nPad ? 'padding mask' : 'веса внимания', size:11.5, weight:700, color:C.ink, alpha:pR });
+    ['1', '2', '3', nPad ? 'P' : '4', nPad ? 'P' : '5'].forEach((lb, j) => D.text({ x:RX + (j - 2) * cs, y:cy + 1.04, z:.1, text:lb, size:11, mono:true, weight:700, color:nPad && j > 2 ? '#B4573A' : M_INK, alpha:pR }));
+    dl7Grid(D, RX, cy, 5, cs, (i, j) => Wm[i][j], pR);
+    D.text({ x:RX, y:1.22, z:.1, text:'каждая строка: Σ = 1', size:11, weight:700, color:GREEN_INK, alpha:pR * seg(t, 3.6, 4.2) });
+  } },
+
+{ title:'Multi-Head Attention', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Одна голова смешивает все связи сразу. Multi-head делит d_model на h частей и запускает h attention параллельно.', code:'d_head = d_model // h  # 256 // 4' },
+    { t:6.0, text:'Каждая голова учит свой шаблон: одна смотрит на соседние слова, другая — на далёкие, например на название компании.', code:'# head 1: соседи, head 2: далёкие', hold:3.8 },
+    { t:12.0, text:'Выходы голов склеивают обратно в d_model и пропускают через проекцию W_O: она смешивает находки всех голов.', code:'out = concat(heads) @ W_O' }],
+  hud:t => t < 6.0 ? [['h', '4 × 64']] : t < 12.0 ? [['головы', 'разные', 'i']] : [['W_O', '→ d_model', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), s = wd ? 1 : .9, a0 = seg(t, .2, .9), kH = seg(t, 6.0, 6.8), kC = seg(t, 12.0, 12.8), p0 = a0 * (1 - kH);
+    const HC = [0x86A8F0, 0xF4A766, 0x7CC79A, 0xC9A0E6], hx = [-1.35, -.45, .45, 1.35].map(v => v * s);
+    // фаза 0: d_model → 4 подпространства
+    D.text({ x:0, y:3.62, z:.1, text:'d_model делится на головы', size:11.5, weight:700, color:C.ink, alpha:p0 });
+    D.box({ x:0, y:3.05, z:0, w:3.6 * s, h:.44, d:.1, round:.3, shadow:false, color:0xC9D6F7, alpha:p0 });
+    D.text({ x:0, y:3.05, z:.12, text:'d_model = 256', size:11.5, mono:true, weight:700, color:C.ink, alpha:p0 });
+    hx.forEach((x, i) => {
+      const k = seg(t, 1.2 + i * .5, 1.8 + i * .5) * (1 - kH);
+      D.arrow({ a:[x, 2.80, .08], b:[x, 2.42, .08], color:'#7D869B', alpha:k });
+      D.box({ x, y:2.18, z:0, w:.8 * s, h:.42, d:.1, round:.3, shadow:false, color:HC[i], alpha:k });
+      D.text({ x, y:2.18, z:.12, text:'64', size:11.5, mono:true, weight:700, color:C.ink, alpha:k });
+      D.text({ x, y:1.78, z:.1, text:(wd ? 'head ' : 'h') + (i + 1), size:11, weight:700, color:M_INK, alpha:k });
+    });
+    mtChip(D, 0, 1.30, '4 attention параллельно', seg(t, 3.8, 4.4) * (1 - kH), { mono:false, size:11, color:GREEN_INK, bg:PILL_OK });
+    if (kH < .01) return;
+    // фаза 1: два шаблона внимания
+    const pH = kH * (1 - kC), gx = [-1.45, 1.45].map(v => v * s), cs = .32;
+    D.text({ x:0, y:3.62, z:.1, text:'У каждой головы свой шаблон', size:11.5, weight:700, color:C.ink, alpha:pH });
+    [['head 1: соседи', (i, j) => Math.abs(i - j) <= 1 ? (i === j ? .45 : .3) : .02, HC[0]],
+     ['head 2: далёкие', (i, j) => j === 0 ? .5 : j === 4 ? .35 : .05, HC[1]]].forEach(([lb, fn, col], g) => {
+      const k = pH * seg(t, 6.6 + g * 1.6, 7.2 + g * 1.6);
+      D.text({ x:gx[g], y:3.18, z:.1, text:lb, size:11.5, weight:700, color:C.ink, alpha:k });
+      dl7Grid(D, gx[g], 2.18, 5, cs, fn, k, g ? 0xD97B29 : 0x3B6FD4);
+    });
+    mtChip(D, gx[1], 1.25, '→ Apple, earnings', pH * seg(t, 9.6, 10.2), { mono:false, size:11, color:'#B4573A', bg:PILL_HOT });
+    mtChip(D, gx[0], 1.25, '± 1 токен', pH * seg(t, 8.6, 9.2), { mono:false, size:11, color:BLUE_INK, bg:TAG });
+    if (kC < .01) return;
+    // фаза 2: concat → W_O
+    D.text({ x:0, y:3.62, z:.1, text:'concat → W_O → d_model', size:11.5, mono:true, weight:700, color:C.ink, alpha:kC });
+    hx.forEach((x, i) => {
+      D.box({ x, y:3.10, z:0, w:.7 * s, h:.36, d:.1, round:.3, shadow:false, color:HC[i], alpha:kC });
+      D.text({ x, y:3.10, z:.12, text:'h' + (i + 1), size:11, mono:true, weight:700, color:C.ink, alpha:kC });
+      const k = seg(t, 12.6, 13.4);
+      D.arrow({ a:[x, 2.88, .08], b:[x, 2.62, .08], color:'#7D869B', alpha:kC * k });
+      D.box({ x, y:2.42, z:0, w:.9 * s, h:.34, d:.1, round:.15, shadow:false, color:HC[i], alpha:kC * k });
+    });
+    D.text({ x:-2.35 * s, y:2.42, z:.1, text:'concat', size:11, mono:true, weight:700, color:M_INK, alpha:seg(t, 13.0, 13.6) });
+    const kW = seg(t, 14.0, 14.6);
+    D.arrow({ a:[0, 2.22, .08], b:[0, 1.86, .08], color:'#7D869B', alpha:kW });
+    D.box({ x:0, y:1.62, z:0, w:1.0, h:.42, d:.1, round:.3, shadow:false, color:0xE9ECF2, alpha:kW });
+    D.text({ x:0, y:1.62, z:.12, text:'W_O', size:12, mono:true, weight:800, color:C.ink, alpha:kW });
+    D.arrow({ a:[.55, 1.62, .08], b:[1.2 * s, 1.62, .08], color:'#25804D', alpha:seg(t, 14.8, 15.4) });
+    mtChip(D, 2.15 * s, 1.62, 'd_model = 256', seg(t, 14.8, 15.4), { size:11, color:GREEN_INK, bg:PILL_OK });
+  } },
+
+{ title:'Transformer-блок', dur:19.0, poster:16.0,
+  beats:[
+    { t:.3, text:'Блок энкодера: x + MHA(x) и LayerNorm, затем x + FFN(x) и снова LayerNorm. Residual даёт градиенту короткий путь.', code:'x = ln(x + mha(x)); x = ln(x + ffn(x))' },
+    { t:6.0, text:'Encoder видит весь вход сразу — это то, что нужно для классификации; autoregressive decoder смотрит через causal mask.', code:'# encoder: всё; decoder: causal mask', hold:3.8 },
+    { t:12.0, text:'Классификатор AG News: ids → embedding + PE → N блоков → masked mean или CLS → Linear → 4 logits по классам.', code:'logits = fc(pool(enc(x)))  # [B, 4]' }],
+  hud:t => t < 6.0 ? [['блок', 'MHA + FFN']] : t < 12.0 ? [['decoder', 'causal', 'i']] : [['выход', '[B, 4]', 'f']],
+  frame:t => mtCam(t, 19.0),
+  draw(t, D){
+    const wd = pd6Wide(), a0 = seg(t, .2, .9), kD = seg(t, 6.0, 6.8), kF = seg(t, 12.0, 12.8);
+    const lc = wd ? -2.15 : -2.05, bw = 1.75, RX = wd ? 2.05 : 1.95;
+    // слева: стек блока энкодера (все фазы)
+    D.text({ x:lc, y:3.62, z:.1, text:'Блок энкодера × N', size:11.5, weight:700, color:C.ink, alpha:a0 });
+    const sy = [1.55, 2.03, 2.60, 3.08];
+    [['MHA', 0xC9D6F7], ['Add & Norm', 0xE9ECF2], ['FFN', 0xFBD9B5], ['Add & Norm', 0xE9ECF2]].forEach(([lb, col], i) => {
+      const y = sy[i];
+      const k = seg(t, .5 + i * .6, 1.1 + i * .6);
+      D.box({ x:lc, y, z:0, w:bw, h:.36, d:.1, round:.3, shadow:false, color:col, alpha:k });
+      D.text({ x:lc, y, z:.12, text:lb, size:11, weight:700, color:C.ink, alpha:k });
+      if (i) D.arrow({ a:[lc, sy[i - 1] + .18, .08], b:[lc, y - .2, .08], color:'#7D869B', alpha:k });
+    });
+    D.arrow({ a:[lc, 1.10, .08], b:[lc, 1.35, .08], color:'#7D869B', alpha:a0 });
+    D.text({ x:lc - .3, y:1.18, z:.1, text:'x', size:11.5, mono:true, weight:700, color:M_INK, alpha:a0 });
+    // residual-обходы
+    [[1.26, 2.03], [2.28, 3.08]].forEach(([y0, y1], i) => {
+      const k = seg(t, 3.0 + i * .8, 3.6 + i * .8), xr = lc + bw / 2 + .25;
+      D.line({ a:[lc, y0, .06], b:[xr, y0, .06], color:'#25804D', width:.03, alpha:k, layer:57 });
+      D.line({ a:[xr, y0, .06], b:[xr, y1, .06], color:'#25804D', width:.03, alpha:k, layer:57 });
+      D.arrow({ a:[xr, y1, .08], b:[lc + bw / 2 + .02, y1, .08], color:'#25804D', alpha:k });
+    });
+    // справа, фаза 0: роли частей
+    [['residual: x + f(x)', PILL_OK, GREEN_INK], ['LayerNorm по d_model', TAG, BLUE_INK], ['FFN: d → 4d → d', PILL_HOT, '#B4573A']].forEach(([s2, bg, col], i) =>
+      mtChip(D, RX, 3.05 - i * .62, s2, seg(t, 3.2 + i * .8, 3.8 + i * .8) * (1 - kD), { mono:false, size:11, color:col, bg }));
+    if (kD < .01) return;
+    // фаза 1: encoder vs decoder
+    const pD = kD * (1 - kF), gx = [RX - .85, RX + .85];
+    [['encoder', (i, j) => .3, 0x3B6FD4, 'весь вход'], ['decoder', (i, j) => j > i ? null : .3, 0xD97B29, 'causal mask']].forEach(([lb, fn, col, cap], g) => {
+      const k = pD * seg(t, 6.6 + g * 1.6, 7.2 + g * 1.6);
+      D.text({ x:gx[g], y:3.22, z:.1, text:lb, size:11.5, weight:700, color:C.ink, alpha:k });
+      dl7Grid(D, gx[g], 2.40, 4, .3, fn, k, col);
+      D.text({ x:gx[g], y:1.55, z:.1, text:cap, size:11, weight:700, color:g ? '#B4573A' : BLUE_INK, alpha:k });
+    });
+    if (kF < .01) return;
+    // фаза 2: поток тензора классификатора
+    D.text({ x:RX, y:3.62, z:.1, text:'AG News: поток тензора', size:11.5, weight:700, color:C.ink, alpha:kF });
+    [['ids  [B, T]', TAG, C.ink], ['emb + PE  [B, T, d]', TAG, BLUE_INK], ['N блоков  [B, T, d]', TAG, BLUE_INK], ['mean / CLS  [B, d]', PILL_HOT, '#B4573A'], ['Linear → logits  [B, 4]', PILL_OK, GREEN_INK]].forEach(([s2, bg, col], i) =>
+      mtChip(D, RX, 3.22 - i * .45, s2, seg(t, 12.4 + i * .7, 13.0 + i * .7), { size:11, color:col, bg }));
+  } }
+];
+
+const DL7_META = [
+  { intro:'Почему attention сменил пошаговую память RNN.',
+    key:'RNN несёт информацию по цепочке из T шагов; attention связывает любые два токена за один шаг и считает все пары параллельно.',
+    keySay:'Главное. Эр-эн-эн передаёт смысл шаг за шагом, а в аттеншн каждый токен сразу смотрит на все остальные, и все пары считаются параллельно.',
+    says:['Возьмём задачу: по заголовку новости из эй-джи ньюс определить один из четырёх классов — мир, спорт, бизнес или наука и техника. Рекуррентная сеть читает заголовок по одному токену и передаёт память дальше по цепочке. Чтобы слово «Apple» повлияло на «earnings», сигнал должен пройти через все шаги между ними.',
+          'Аттеншн устроен иначе. Каждый токен напрямую смотрит на все остальные токены и сам решает, на кого обратить внимание. Путь от «earnings» до «Apple» — один шаг, сколько бы слов ни стояло между ними.',
+          'И ещё одно важное отличие. Связи всех пар токенов считаются одной матричной операцией, параллельно, а не по очереди. Поэтому трансформер хорошо ложится на видеокарту и учится быстрее рекуррентной сети.'],
+    terms:[['RNN', 'память по цепочке, T шагов'], ['attention', 'прямая связь любых токенов'], ['параллельность', 'все пары за раз']] },
+  { intro:'Self-attention не видит порядок — позицию добавляют явно.',
+    key:'Без позиции self-attention переставочно-эквивариантен; x = token embedding + positional encoding (синусы или обучаемый), форма [B, T, d_model].',
+    keySay:'Главное. Селф-аттеншн сам порядок не видит, поэтому к эмбеддингу токена прибавляют позишнл энкодинг, и форма остаётся бэ на тэ на дэ-модел.',
+    says:['У селф-аттеншн есть неожиданное свойство: он не знает порядок слов. Если переставить токены местами, выходы будут те же, просто переставленные. Для него «Apple buys startup» и «startup buys Apple» — один и тот же набор слов, а смысл у заголовков разный.',
+          'Поэтому к эмбеддингу каждого токена прибавляют вектор его позиции — позишнл энкодинг. В классическом трансформере это синусоиды разной частоты, а можно просто учить отдельную таблицу позиций, как обычный эмбеддинг.',
+          'Векторы складываются поэлементно, поэтому форма не меняется: батч на длину на дэ-модел. Теперь каждый вектор несёт сразу две вещи — смысл токена и его место в заголовке.'],
+    terms:[['token embedding', 'смысл токена'], ['positional encoding', 'синусы или обучаемый'], ['[B, T, d_model]', 'батч × позиции × признаки']] },
+  { intro:'Как токен решает, на кого смотреть: Query, Key и Value.',
+    key:'Q = XW_Q, K = XW_K, V = XW_V; веса = softmax(QKᵀ) по строке, выход — взвешенная сумма V.',
+    keySay:'Главное. Квери спрашивает, ки отвечает, софтмакс превращает сходство в веса, а вэлью смешиваются с этими весами.',
+    says:['Каждый вектор икс проходит через три линейных слоя и получает три роли. Квери — что этот токен ищет. Ки — что он может предложить другим. Вэлью — какую информацию он передаст, если на него посмотрят.',
+          'Возьмём токен «shares». Его квери умножаем на ки всех токенов заголовка и получаем строку оценок сходства. Софтмакс превращает эти оценки в веса от нуля до единицы, которые в сумме дают ровно один.',
+          'Выход для «shares» — это смесь вэлью всех токенов с найденными весами. Больше всего он берёт от «Apple» и «earnings»: чьи акции и почему выросли. На служебное слово «after» почти не смотрит.'],
+    terms:[['Query', 'что ищу'], ['Key', 'что предлагаю'], ['Value', 'что передам']] },
+  { intro:'Зачем делить на √d_k и как маски прячут лишнее.',
+    key:'scores = QKᵀ / √d_k; padding mask и causal mask ставят −∞ до softmax, строка весов суммируется в 1 по разрешённым позициям.',
+    keySay:'Главное. Деление на корень из дэ-ка не даёт софтмаксу стать почти one-hot, а маски ставят минус бесконечность туда, куда смотреть нельзя.',
+    says:['Скалярное произведение квери и ки растёт вместе с размерностью дэ-ка. Большие числа в софтмакс дают почти one-hot: весь вес достаётся одному токену, а градиенты остальных пропадают. Поэтому оценки делят на корень из дэ-ка, и распределение остаётся мягким.',
+          'В батче короткие заголовки дополнены пэдами. Пэддинг маска ставит минус бесконечность в колонки пэдов ещё до софтмакса. Экспонента от минус бесконечности — ноль, поэтому вес пэдов ровно ноль, а строка по настоящим токенам суммируется в единицу.',
+          'Козал маск — треугольная: токен видит себя и прошлое, а будущее закрыто. Она нужна декодеру, который генерирует текст слева направо. Энкодеру для классификации такая маска не нужна, ему достаточно маски пэдов.'],
+    terms:[['√d_k', 'держит softmax мягким'], ['padding mask', 'PAD → −∞ → вес 0'], ['causal mask', 'только j ≤ i']] },
+  { intro:'Несколько голов внимания видят разные связи.',
+    key:'h голов работают в подпространствах d_model / h параллельно, учат разные шаблоны; concat → W_O возвращает d_model.',
+    keySay:'Главное. Мульти-хед аттеншн запускает несколько голов в маленьких подпространствах, каждая ловит свои связи, а проекция дабл-ю-о собирает их вместе.',
+    says:['Одна голова внимания вынуждена смешивать все связи в одну картину. Мульти-хед аттеншн делит дэ-модел, например двести пятьдесят шесть, на четыре части по шестьдесят четыре и запускает четыре аттеншн параллельно, каждый со своими весами.',
+          'Каждый хед учит свой шаблон. Один чаще смотрит на соседние слова, локальный контекст. Другой тянется к далёким и важным токенам, например к названию компании или слову «earnings». Никто их этому не учит явно, шаблоны появляются из задачи.',
+          'Выходы всех голов склеивают обратно в вектор длины дэ-модел и умножают на матрицу дабл-ю-о. Эта проекция смешивает находки голов, и на выходе снова та же форма, что и на входе.'],
+    terms:[['head', 'attention в d_model / h'], ['шаблон', 'соседи · дальние связи'], ['W_O', 'concat → d_model']] },
+  { intro:'Из чего собран блок трансформера и классификатор новостей.',
+    key:'Блок: x + MHA(x) → LayerNorm → x + FFN(x) → LayerNorm; encoder видит всё, decoder — causal mask; ids → N блоков → pool → Linear → [B, 4].',
+    keySay:'Главное. Блок трансформера — мульти-хед аттеншн и фид-форвард, каждый с резидуал и лэйер-норм; энкодер для классификации, декодер с козал маск для генерации.',
+    says:['Соберём блок энкодера. Сначала мульти-хед аттеншн, его выход прибавляем ко входу — это резидуал связь — и нормируем лэйер-норм. Потом фид-форвард сеть, снова резидуал и снова лэйер-норм. Резидуал даёт градиенту короткий путь сквозь десятки блоков.',
+          'Энкодер видит весь вход сразу, и для классификации это именно то, что нужно. Декодер генерирует текст по одному токену, поэтому смотрит только назад, через козал маск. Энкодер-декодер, как в переводе, соединяет обе части.',
+          'Подведём итог на эй-джи ньюс. Индексы токенов превращаем в эмбеддинги плюс позицию, пропускаем через эн блоков энкодера, усредняем по настоящим токенам или берём токен си-эл-эс и линейным слоем получаем четыре логита — по одному на класс.'],
+    terms:[['residual', 'x + f(x)'], ['LayerNorm', 'нормировка по d_model'], ['encoder / decoder', 'всё / causal mask']] }
+];
+
+const DL7_CHEAT = `<span class="kw">import</span> math, torch, torch.nn <span class="kw">as</span> nn
+
+<span class="kw">def</span> <span class="fn">attention</span>(q, k, v, mask=<span class="kw">None</span>):           <span class="c"># q, k, v: [B, h, T, d_k]</span>
+    s = q @ k.<span class="fn">transpose</span>(-2, -1) / math.<span class="fn">sqrt</span>(q.<span class="fn">size</span>(-1))
+    <span class="kw">if</span> mask <span class="kw">is not None</span>:
+        s = s.<span class="fn">masked_fill</span>(~mask, <span class="fn">float</span>(<span class="c">'-inf'</span>))  <span class="c"># PAD / будущее → 0 после softmax</span>
+    <span class="kw">return</span> s.<span class="fn">softmax</span>(-1) @ v
+
+<span class="kw">class</span> <span class="fn">NewsClassifier</span>(nn.Module):                <span class="c"># AG News: 4 класса</span>
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, V, T=64, d=256, h=4, N=2):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.tok = nn.<span class="fn">Embedding</span>(V, d, padding_idx=0)
+        self.pos = nn.<span class="fn">Embedding</span>(T, d)                <span class="c"># обучаемая позиция</span>
+        layer = nn.<span class="fn">TransformerEncoderLayer</span>(d, h, 4 * d, batch_first=<span class="kw">True</span>)
+        self.enc = nn.<span class="fn">TransformerEncoder</span>(layer, N)
+        self.fc = nn.<span class="fn">Linear</span>(d, 4)
+    <span class="kw">def</span> <span class="fn">forward</span>(self, ids):                       <span class="c"># ids: [B, T]</span>
+        pad = ids == 0
+        x = self.<span class="fn">tok</span>(ids) + self.<span class="fn">pos</span>(torch.<span class="fn">arange</span>(ids.<span class="fn">size</span>(1), device=ids.device))
+        x = self.<span class="fn">enc</span>(x, src_key_padding_mask=pad)   <span class="c"># [B, T, d]</span>
+        m = (~pad).<span class="fn">unsqueeze</span>(-1).<span class="fn">float</span>()
+        <span class="kw">return</span> self.<span class="fn">fc</span>((x * m).<span class="fn">sum</span>(1) / m.<span class="fn">sum</span>(1))  <span class="c"># masked mean → [B, 4]</span>`;
+
+applyMeta(DL7_SCENES, DL7_META);
+DL_LESSONS.push({ short:'Transformers', title:'Attention и Transformers',
+  intro:{ eyebrow:'Тема 07 · Deep Learning', title:'Как токены смотрят друг на друга',
+          text:'Почему attention заменил пошаговую память RNN, зачем self-attention позиция, как Query, Key и Value превращаются в веса, зачем √d_k и маски, что дают несколько голов и как из блоков собирается классификатор новостей AG News.',
+          meta:'6 сцен · около 4 минут в спокойном темпе' },
+  end:{ title:'Внимание вместо памяти', text:'Attention связывает любые токены за шаг и считает пары параллельно. Позиция прибавляется к embedding, Q и K дают веса через softmax, V смешивается по ним, маски прячут PAD и будущее. Впереди — эксперименты и воспроизводимость.',
+        rule:'Маскируй PAD, дели на √d_k, начинай с малого энкодера и mean pooling.' },
+  legend:[['#86A8F0', 'K · head 1 · encoder'], ['#F4A766', 'Q · head 2 · decoder'], ['#3A9E4F', 'V · residual'], ['#B9BFCB', 'маска: −∞']],
+  cheat:DL7_CHEAT,
+  scenes:DL7_SCENES });
+
+const DL_UPCOMING = [[8, 'DL-эксперименты и воспроизводимость']];
 
 const UPCOMING = [];
 const MODULES = [
